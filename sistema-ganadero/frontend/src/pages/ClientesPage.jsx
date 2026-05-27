@@ -1,4 +1,5 @@
-import { useState } from 'react'
+// frontend/src/pages/ClientesPage.jsx
+import { useState, useMemo } from 'react'
 import { useClientes } from '../hooks/useClientes'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -10,11 +11,15 @@ import EmptyState from '../components/ui/EmptyState'
 
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
-  Typography, IconButton, Tooltip,
+  Typography, IconButton, Tooltip, TextField, InputAdornment,
+  MenuItem, Select, FormControl, InputLabel, Chip, Stack,
 } from '@mui/material'
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import SearchIcon from '@mui/icons-material/Search'
+import ClearIcon from '@mui/icons-material/Clear'
+import FilterListIcon from '@mui/icons-material/FilterList'
 
 export default function ClientesPage() {
   const { clientes, loading, error, crearCliente, actualizarCliente, eliminarCliente } = useClientes()
@@ -22,6 +27,33 @@ export default function ClientesPage() {
   const [editing, setEditing] = useState(null)
   const [message, setMessage] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
+  
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Filtrar clientes
+  const clientesFiltrados = useMemo(() => {
+    let filtered = [...clientes]
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(c => 
+        c.nombre?.toLowerCase().includes(term) ||
+        c.apellidos?.toLowerCase().includes(term) ||
+        c.ci?.toLowerCase().includes(term) ||
+        c.telefono?.toLowerCase().includes(term) ||
+        c.email?.toLowerCase().includes(term) ||
+        c.direccion?.toLowerCase().includes(term)
+      )
+    }
+    
+    return filtered
+  }, [clientes, searchTerm])
+
+  const limpiarFiltros = () => {
+    setSearchTerm('')
+  }
 
   const notify = (result) => {
     setMessage({ type: result.success ? 'success' : 'error', text: result.message })
@@ -53,6 +85,8 @@ export default function ClientesPage() {
   if (loading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={error.message} />
 
+  const hayFiltrosActivos = searchTerm !== ''
+
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       <PageHeader
@@ -64,13 +98,72 @@ export default function ClientesPage() {
 
       <PageAlert message={message} onClose={() => setMessage(null)} />
 
-      {clientes.length === 0 ? (
+      {/* Barra de búsqueda y filtros */}
+      <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <TextField
+            placeholder="Buscar por nombre, apellido, CI, teléfono, email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="small"
+            fullWidth
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')}>
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+          
+          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <Tooltip title="Filtros avanzados">
+              <IconButton onClick={() => setShowFilters(!showFilters)} color={showFilters ? 'primary' : 'default'}>
+                <FilterListIcon />
+              </IconButton>
+            </Tooltip>
+            {hayFiltrosActivos && (
+              <Chip 
+                label="Limpiar filtros" 
+                size="small" 
+                onClick={limpiarFiltros}
+                onDelete={limpiarFiltros}
+              />
+            )}
+          </Box>
+        </Stack>
+
+        {showFilters && (
+          <Stack direction="row" spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+              🔍 Los filtros avanzados para clientes incluyen búsqueda por:
+              nombre, apellido, CI, teléfono, email y dirección
+            </Typography>
+          </Stack>
+        )}
+
+        {hayFiltrosActivos && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+            {clientesFiltrados.length} de {clientes.length} clientes encontrados
+          </Typography>
+        )}
+      </Paper>
+
+      {clientesFiltrados.length === 0 ? (
         <EmptyState
           icon={PeopleOutlinedIcon}
-          title="No hay clientes registrados"
-          description="Agregá el primer cliente para comenzar a registrar ventas."
+          title={hayFiltrosActivos ? "No hay clientes que coincidan con la búsqueda" : "No hay clientes registrados"}
+          description={hayFiltrosActivos ? "Intentá con otros términos de búsqueda." : "Agregá el primer cliente para comenzar a registrar ventas."}
           onAction={openAdd}
-          actionLabel="Crear primer cliente"
+          actionLabel={hayFiltrosActivos ? "Limpiar filtros" : "Crear primer cliente"}
+          onSecondaryAction={hayFiltrosActivos ? limpiarFiltros : undefined}
         />
       ) : (
         <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
@@ -88,7 +181,7 @@ export default function ClientesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {clientes.map((c) => (
+                {clientesFiltrados.map((c) => (
                   <TableRow key={c.id} hover>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>{c.nombre}</Typography>

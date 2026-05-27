@@ -1,4 +1,5 @@
-import { useState } from 'react'
+// frontend/src/pages/AlertasPage.jsx
+import { useState, useMemo } from 'react'
 import { useAlertas } from '../hooks/useAlertas'
 import LoadingSpinner from '../components/LoadingSpinner'
 import PageAlert      from '../components/ui/PageAlert'
@@ -10,9 +11,9 @@ import GastoForm      from '../components/GastoForm'
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
   Typography, Tabs, Tab, Chip, Card, CardContent, Grid,
-  IconButton, Tooltip,
+  IconButton, Tooltip, TextField, InputAdornment,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, TextField, MenuItem,
+  Button, MenuItem, Stack, FormControl, InputLabel, Select,
 } from '@mui/material'
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined'
 import ListAltOutlinedIcon       from '@mui/icons-material/ListAltOutlined'
@@ -20,6 +21,9 @@ import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlin
 import AddCircleOutlinedIcon     from '@mui/icons-material/AddCircleOutlined'
 import EditOutlinedIcon          from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon        from '@mui/icons-material/DeleteOutlined'
+import SearchIcon                from '@mui/icons-material/Search'
+import ClearIcon                 from '@mui/icons-material/Clear'
+import FilterListIcon            from '@mui/icons-material/FilterList'
 
 const TIPOS_GASTO = [
   { value: 'SANIDAD',       label: 'Sanidad' },
@@ -62,6 +66,93 @@ export default function AlertasPage() {
   const [editForm, setEditForm]       = useState(EMPTY_EDIT)
   const [confirmGastoId, setConfirmGastoId] = useState(null)
   const [confirmAlertaId, setConfirmAlertaId] = useState(null)
+  
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [tipoGastoFilter, setTipoGastoFilter] = useState('todos')
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [fechaFin, setFechaFin] = useState('')
+
+  // Filtrar gastos
+  const gastosFiltrados = useMemo(() => {
+    let filtered = [...gastos]
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(g => 
+        g.descripcion?.toLowerCase().includes(term) ||
+        g.tipoGasto?.toLowerCase().includes(term) ||
+        g.animal?.nroArete?.toLowerCase().includes(term)
+      )
+    }
+    
+    if (tipoGastoFilter !== 'todos') {
+      filtered = filtered.filter(g => g.tipoGasto === tipoGastoFilter)
+    }
+    
+    if (fechaInicio) {
+      filtered = filtered.filter(g => new Date(g.fecha) >= new Date(fechaInicio))
+    }
+    if (fechaFin) {
+      filtered = filtered.filter(g => new Date(g.fecha) <= new Date(fechaFin))
+    }
+    
+    return filtered
+  }, [gastos, searchTerm, tipoGastoFilter, fechaInicio, fechaFin])
+
+  // Filtrar alertas
+  const alertasFiltradas = useMemo(() => {
+    let filtered = [...alertas]
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(a => 
+        a.mensaje?.toLowerCase().includes(term) ||
+        a.tipo?.toLowerCase().includes(term) ||
+        a.animal?.nroArete?.toLowerCase().includes(term)
+      )
+    }
+    
+    if (fechaInicio) {
+      filtered = filtered.filter(a => new Date(a.fechaAlerta) >= new Date(fechaInicio))
+    }
+    if (fechaFin) {
+      filtered = filtered.filter(a => new Date(a.fechaAlerta) <= new Date(fechaFin))
+    }
+    
+    return filtered
+  }, [alertas, searchTerm, fechaInicio, fechaFin])
+
+  // Filtrar alertas pendientes
+  const alertasPendientesFiltradas = useMemo(() => {
+    let filtered = [...alertasPendientes]
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(a => 
+        a.mensaje?.toLowerCase().includes(term) ||
+        a.tipo?.toLowerCase().includes(term) ||
+        a.animal?.nroArete?.toLowerCase().includes(term)
+      )
+    }
+    
+    if (fechaInicio) {
+      filtered = filtered.filter(a => new Date(a.fechaAlerta) >= new Date(fechaInicio))
+    }
+    if (fechaFin) {
+      filtered = filtered.filter(a => new Date(a.fechaAlerta) <= new Date(fechaFin))
+    }
+    
+    return filtered
+  }, [alertasPendientes, searchTerm, fechaInicio, fechaFin])
+
+  const limpiarFiltros = () => {
+    setSearchTerm('')
+    setTipoGastoFilter('todos')
+    setFechaInicio('')
+    setFechaFin('')
+  }
 
   const notify = (type, text) => {
     setMessage({ type, text })
@@ -105,10 +196,13 @@ export default function AlertasPage() {
 
   const tabsWithCount = TABS.map((t, i) => ({
     ...t,
-    count: i === 0 ? alertasPendientes.length : i === 1 ? alertas.length : i === 2 ? gastos.length : undefined,
+    count: i === 0 ? alertasPendientesFiltradas.length : i === 1 ? alertasFiltradas.length : i === 2 ? gastosFiltrados.length : undefined,
   }))
 
   if (loading) return <LoadingSpinner />
+
+  const hayFiltrosActivos = searchTerm || tipoGastoFilter !== 'todos' || fechaInicio || fechaFin
+  const mostrarFiltros = tabIdx === 0 || tabIdx === 1 || tabIdx === 2
 
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
@@ -118,13 +212,103 @@ export default function AlertasPage() {
       </Box>
 
       <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={3}><KPI label="Alertas pendientes"   value={alertasPendientes.length}            accent="#E65100" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><KPI label="Total alertas"        value={alertas.length}                     accent="#1565C0" /></Grid>
+        <Grid item xs={12} sm={6} md={3}><KPI label="Alertas pendientes"   value={alertasPendientesFiltradas.length}            accent="#E65100" /></Grid>
+        <Grid item xs={12} sm={6} md={3}><KPI label="Total alertas"        value={alertasFiltradas.length}                     accent="#1565C0" /></Grid>
         <Grid item xs={12} sm={6} md={3}><KPI label="Total gastos"         value={`Gs. ${totalGastos.toLocaleString()}`} accent="#2E7D32" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><KPI label="Registros de gastos"  value={gastos.length}                      accent="#6A1B9A" /></Grid>
+        <Grid item xs={12} sm={6} md={3}><KPI label="Registros de gastos"  value={gastosFiltrados.length}                      accent="#6A1B9A" /></Grid>
       </Grid>
 
       <PageAlert message={message} onClose={() => setMessage(null)} />
+
+      {/* Barra de búsqueda y filtros */}
+      {mostrarFiltros && (
+        <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <TextField
+              placeholder="Buscar por descripción, tipo, arete del animal..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchTerm('')}>
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+            
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <Tooltip title="Filtros avanzados">
+                <IconButton onClick={() => setShowFilters(!showFilters)} color={showFilters ? 'primary' : 'default'}>
+                  <FilterListIcon />
+                </IconButton>
+              </Tooltip>
+              {hayFiltrosActivos && (
+                <Chip 
+                  label="Limpiar filtros" 
+                  size="small" 
+                  onClick={limpiarFiltros}
+                  onDelete={limpiarFiltros}
+                />
+              )}
+            </Box>
+          </Stack>
+
+          {/* Filtros avanzados */}
+          {showFilters && (
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
+              {tabIdx === 2 && (
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Tipo de Gasto</InputLabel>
+                  <Select value={tipoGastoFilter} onChange={(e) => setTipoGastoFilter(e.target.value)} label="Tipo de Gasto">
+                    <MenuItem value="todos">Todos</MenuItem>
+                    {TIPOS_GASTO.map(tipo => (
+                      <MenuItem key={tipo.value} value={tipo.value}>{tipo.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
+              <TextField
+                label="Fecha desde"
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 150 }}
+              />
+
+              <TextField
+                label="Fecha hasta"
+                type="date"
+                value={fechaFin}
+                onChange={(e) => setFechaFin(e.target.value)}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 150 }}
+              />
+            </Stack>
+          )}
+
+          {hayFiltrosActivos && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+              {tabIdx === 0 && `${alertasPendientesFiltradas.length} de ${alertasPendientes.length} alertas pendientes encontradas`}
+              {tabIdx === 1 && `${alertasFiltradas.length} de ${alertas.length} alertas encontradas`}
+              {tabIdx === 2 && `${gastosFiltrados.length} de ${gastos.length} gastos encontrados`}
+            </Typography>
+          )}
+        </Paper>
+      )}
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabIdx} onChange={(_, v) => setTabIdx(v)} variant="scrollable" scrollButtons="auto">
@@ -137,11 +321,11 @@ export default function AlertasPage() {
       </Box>
 
       {tabIdx === 0 && (
-        <AlertasList alertas={alertasPendientes} onMarcarLeida={handleMarcarLeida} onEliminar={(id) => setConfirmAlertaId(id)} titulo="Alertas Pendientes" />
+        <AlertasList alertas={alertasPendientesFiltradas} onMarcarLeida={handleMarcarLeida} onEliminar={(id) => setConfirmAlertaId(id)} titulo="Alertas Pendientes" />
       )}
 
       {tabIdx === 1 && (
-        <AlertasList alertas={alertas} onMarcarLeida={handleMarcarLeida} onEliminar={(id) => setConfirmAlertaId(id)} titulo="Historial de Alertas" />
+        <AlertasList alertas={alertasFiltradas} onMarcarLeida={handleMarcarLeida} onEliminar={(id) => setConfirmAlertaId(id)} titulo="Historial de Alertas" />
       )}
 
       {tabIdx === 2 && (
@@ -161,31 +345,39 @@ export default function AlertasPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {gastos.map(g => (
-                  <TableRow key={g.id} hover>
-                    <TableCell>{new Date(g.fecha).toLocaleDateString('es-PY')}</TableCell>
-                    <TableCell>
-                      <Chip size="small" label={g.tipoGasto} sx={{ bgcolor: '#F1F5F9', color: '#475569', fontWeight: 500 }} />
-                    </TableCell>
-                    <TableCell>{g.descripcion?.substring(0, 50)}</TableCell>
-                    <TableCell>{g.cantidad}</TableCell>
-                    <TableCell>Gs. {parseFloat(g.precioUnitario).toLocaleString()}</TableCell>
-                    <TableCell><Typography variant="body2" fontWeight={700}>Gs. {parseFloat(g.total).toLocaleString()}</Typography></TableCell>
-                    <TableCell>{g.animal?.nroArete || '—'}</TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Editar">
-                        <IconButton size="small" color="warning" onClick={() => handleEditarGasto(g)}>
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Eliminar">
-                        <IconButton size="small" color="error" onClick={() => setConfirmGastoId(g.id)}>
-                          <DeleteOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                {gastosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                      {searchTerm ? 'No hay gastos que coincidan con la búsqueda' : 'No hay gastos registrados'}
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  gastosFiltrados.map(g => (
+                    <TableRow key={g.id} hover>
+                      <TableCell>{new Date(g.fecha).toLocaleDateString('es-PY')}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={g.tipoGasto} sx={{ bgcolor: '#F1F5F9', color: '#475569', fontWeight: 500 }} />
+                      </TableCell>
+                      <TableCell>{g.descripcion?.substring(0, 50)}</TableCell>
+                      <TableCell>{g.cantidad}</TableCell>
+                      <TableCell>Gs. {parseFloat(g.precioUnitario).toLocaleString()}</TableCell>
+                      <TableCell><Typography variant="body2" fontWeight={700}>Gs. {parseFloat(g.total).toLocaleString()}</Typography></TableCell>
+                      <TableCell>{g.animal?.nroArete || '—'}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Editar">
+                          <IconButton size="small" color="warning" onClick={() => handleEditarGasto(g)}>
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Eliminar">
+                          <IconButton size="small" color="error" onClick={() => setConfirmGastoId(g.id)}>
+                            <DeleteOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </Box>
@@ -203,7 +395,7 @@ export default function AlertasPage() {
             <TextField select label="Tipo de gasto" required size="small" value={editForm.tipoGasto} onChange={setField('tipoGasto')}>
               {TIPOS_GASTO.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
             </TextField>
-            <TextField label="Descripción" required size="small" multiline rows={2} value={editForm.descripcion} onChange={setField('descripcion')} />
+            <TextField label="Descripción" required size="small" multiline rows="2" value={editForm.descripcion} onChange={setField('descripcion')} />
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <TextField label="Cantidad" type="number" size="small" fullWidth value={editForm.cantidad} onChange={setField('cantidad')} />
