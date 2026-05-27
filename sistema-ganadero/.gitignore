@@ -1,0 +1,29 @@
+# Python / Django
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+db.sqlite3
+
+# Variables privadas
+.env
+backend/.env
+frontend/.env
+
+# Node / React
+frontend/node_modules/
+node_modules/
+dist/
+build/
+
+# VS Code / Sistema
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
