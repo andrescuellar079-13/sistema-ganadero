@@ -30,6 +30,12 @@ import {
   Stack,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
 } from '@mui/material'
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined'
 import SearchIcon from '@mui/icons-material/Search'
@@ -37,14 +43,34 @@ import ClearIcon from '@mui/icons-material/Clear'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SortIcon from '@mui/icons-material/Sort'
 import AssessmentIcon from '@mui/icons-material/Assessment'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 
 export default function VentasPage() {
-  const { notasVenta, clientes, animalesDisponibles, loading, error, crearNotaVenta, crearDetalleVenta } = useVentas()
+  const { 
+    notasVenta, 
+    clientes, 
+    animalesDisponibles, 
+    loading, 
+    error, 
+    crearNotaVenta, 
+    crearDetalleVenta,
+    actualizarVentaCompleta,
+    eliminarNotaVenta,
+    refetch 
+  } = useVentas()
+  
   const [showForm, setShowForm] = useState(false)
   const [message, setMessage] = useState(null)
   const [tabValue, setTabValue] = useState(0)
   
-  // Estados para filtros y ordenamiento
+  const [editingVenta, setEditingVenta] = useState(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [ventaToDelete, setVentaToDelete] = useState(null)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [selectedVenta, setSelectedVenta] = useState(null)
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('mas_reciente')
   const [filterEstado, setFilterEstado] = useState('todos')
@@ -75,14 +101,63 @@ export default function VentasPage() {
     if (result.success && detalles.length > 0) {
       const notaVentaId = result.id
       for (const d of detalles) {
-        await crearDetalleVenta({ notaVentaId, animalId: d.animalId, pesoVentaKg: d.pesoVentaKg, precioKg: d.precioKg })
+        await crearDetalleVenta({ 
+          notaVentaId, 
+          animalId: d.animalId, 
+          pesoVentaKg: d.pesoVentaKg, 
+          precioKg: d.precioKg 
+        })
       }
       setMessage({ type: 'success', text: 'Venta registrada exitosamente' })
       setShowForm(false)
+      refetch()
     } else {
       setMessage({ type: 'error', text: result.message || 'Error al registrar venta' })
     }
     setTimeout(() => setMessage(null), 3500)
+  }
+
+  const handleEdit = (venta) => {
+    setEditingVenta(venta)
+    setShowForm(true)
+  }
+
+  const handleUpdate = async (formData, detalles) => {
+    const result = await actualizarVentaCompleta(editingVenta.id, formData, detalles)
+    if (result.success) {
+      setMessage({ type: 'success', text: result.message })
+      setShowForm(false)
+      setEditingVenta(null)
+      refetch()
+    } else {
+      setMessage({ type: 'error', text: result.message })
+    }
+    setTimeout(() => setMessage(null), 3500)
+  }
+
+  const handleDeleteClick = (venta) => {
+    setVentaToDelete(venta)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (ventaToDelete) {
+      const result = await eliminarNotaVenta(ventaToDelete.id)
+      if (result.success) {
+        setMessage({ type: 'success', text: result.message })
+        refetch()
+      } else {
+        setMessage({ type: 'error', text: result.message })
+      }
+      setDeleteDialogOpen(false)
+      setVentaToDelete(null)
+      setTimeout(() => setMessage(null), 3500)
+    }
+  }
+
+  const handleViewDetails = (venta) => {
+    setSelectedVenta(venta)
+    setDetailDialogOpen(true)
   }
 
   const filtrarVentas = (venta) => {
@@ -128,7 +203,10 @@ export default function VentasPage() {
       <PageHeader
         title="Ventas"
         icon={PointOfSaleOutlinedIcon}
-        onAdd={() => setShowForm(true)}
+        onAdd={() => {
+          setEditingVenta(null)
+          setShowForm(true)
+        }}
         addLabel="Nueva Venta"
       />
 
@@ -139,7 +217,6 @@ export default function VentasPage() {
         <Tab label="Reportes y Estadísticas" icon={<AssessmentIcon />} iconPosition="start" />
       </Tabs>
 
-      {/* Tab: Listado de Ventas */}
       {tabValue === 0 && (
         <>
           <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
@@ -175,7 +252,7 @@ export default function VentasPage() {
                 
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                   <InputLabel>Ordenar por</InputLabel>
-                  <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Ordenar por" startAdornment={<SortIcon fontSize="small" sx={{ mr: 0.5 }} />}>
+                  <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Ordenar por">
                     {sortOptions.map(opt => (
                       <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
                     ))}
@@ -230,6 +307,7 @@ export default function VentasPage() {
                       <TableCell>CI / RUC</TableCell>
                       <TableCell>Monto Total</TableCell>
                       <TableCell>Observaciones</TableCell>
+                      <TableCell align="center">Acciones</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -248,6 +326,25 @@ export default function VentasPage() {
                           </Typography>
                         </TableCell>
                         <TableCell>{v.observaciones || '—'}</TableCell>
+                        <TableCell align="center">
+                          <Stack direction="row" spacing={1} justifyContent="center">
+                            <Tooltip title="Ver detalles">
+                              <IconButton size="small" onClick={() => handleViewDetails(v)} sx={{ color: '#3b82f6' }}>
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Editar">
+                              <IconButton size="small" onClick={() => handleEdit(v)} sx={{ color: '#eab308' }}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Eliminar">
+                              <IconButton size="small" onClick={() => handleDeleteClick(v)} sx={{ color: '#ef4444' }}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -258,17 +355,131 @@ export default function VentasPage() {
         </>
       )}
 
-      {/* Tab: Reportes y Estadísticas */}
       {tabValue === 1 && <ReportesVentas />}
 
       {showForm && (
         <VentaForm
           clientes={clientes}
           animales={animalesDisponibles}
-          onSubmit={handleCreate}
-          onCancel={() => setShowForm(false)}
+          initialData={editingVenta ? {
+            clienteId: editingVenta.cliente?.id,
+            fechaVenta: editingVenta.fechaVenta?.split('T')[0],
+            observaciones: editingVenta.observaciones || '',
+            detalles: editingVenta.detalles?.map(d => ({
+              animalId: d.animal?.id,
+              pesoVentaKg: d.pesoVentaKg,
+              precioKg: d.precioKg,
+              nombre: d.animal?.nroArete,
+              subtotal: d.subTotal
+            })) || []
+          } : null}
+          onSubmit={editingVenta ? handleUpdate : handleCreate}
+          onCancel={() => {
+            setShowForm(false)
+            setEditingVenta(null)
+          }}
+          isEditing={!!editingVenta}
+          onDelete={editingVenta ? () => handleDeleteClick(editingVenta) : null}
         />
       )}
+
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Confirmar eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de que deseas eliminar la venta #{ventaToDelete?.id} de{' '}
+            <strong>{ventaToDelete?.cliente?.nombre} {ventaToDelete?.cliente?.apellidos}</strong>?
+            <br />
+            <br />
+            Esta acción eliminará también todos los detalles de la venta y no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={detailDialogOpen} onClose={() => setDetailDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Detalle de Venta #{selectedVenta?.id}</DialogTitle>
+        <DialogContent dividers>
+          {selectedVenta && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Cliente</Typography>
+                  <Typography variant="body1">
+                    {selectedVenta.cliente?.nombre} {selectedVenta.cliente?.apellidos}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    CI: {selectedVenta.cliente?.ci || 'N/A'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Fecha</Typography>
+                  <Typography variant="body1">
+                    {new Date(selectedVenta.fechaVenta).toLocaleDateString('es-PY')}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>Animales vendidos</Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Animal</TableCell>
+                      <TableCell align="right">Peso (kg)</TableCell>
+                      <TableCell align="right">Precio/kg</TableCell>
+                      <TableCell align="right">Subtotal</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedVenta.detalles?.map((detalle, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{detalle.animal?.nroArete} - {detalle.animal?.nombre || 'Sin nombre'}</TableCell>
+                        <TableCell align="right">{detalle.pesoVentaKg}</TableCell>
+                        <TableCell align="right">Bs. {detalle.precioKg}</TableCell>
+                        <TableCell align="right">Bs. {detalle.subTotal?.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={3} align="right">
+                        <Typography variant="subtitle2">Total:</Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="subtitle2" fontWeight="bold" color="green">
+                          Bs. {selectedVenta.montoTotal?.toLocaleString()}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Box>
+
+              {selectedVenta.observaciones && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Observaciones</Typography>
+                  <Typography variant="body2" sx={{ bgcolor: '#f5f5f5', p: 1.5, borderRadius: 1 }}>
+                    {selectedVenta.observaciones}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDetailDialogOpen(false)
+            handleEdit(selectedVenta)
+          }} color="warning">
+            Editar Venta
+          </Button>
+          <Button onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

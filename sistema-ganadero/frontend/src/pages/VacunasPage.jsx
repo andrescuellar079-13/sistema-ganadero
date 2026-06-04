@@ -29,7 +29,6 @@ export default function VacunasPage() {
   const [message, setMessage] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   
-  // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [viaFilter, setViaFilter] = useState('todos')
@@ -37,42 +36,27 @@ export default function VacunasPage() {
   const [intervaloMin, setIntervaloMin] = useState('')
   const [intervaloMax, setIntervaloMax] = useState('')
 
-  // ==========================================
-  // FILTROS
-  // ==========================================
   const vacunasFiltradas = useMemo(() => {
     let filtered = [...vacunas]
-    
-    // Filtro por búsqueda (nombre, descripción)
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(v => 
         v.nombre?.toLowerCase().includes(term) ||
-        v.descripcion?.toLowerCase().includes(term) ||
-        v.dosisRecomendada?.toLowerCase().includes(term)
+        v.descripcion?.toLowerCase().includes(term)
       )
     }
-    
-    // Filtro por vía de aplicación
     if (viaFilter !== 'todos') {
       filtered = filtered.filter(v => v.viaAplicacion === viaFilter)
     }
-    
-    // Filtro por estado
     if (estadoFilter !== 'todos') {
-      filtered = filtered.filter(v => 
-        estadoFilter === 'activo' ? v.activo === true : v.activo === false
-      )
+      filtered = filtered.filter(v => estadoFilter === 'activo' ? v.activo === true : v.activo === false)
     }
-    
-    // Filtro por intervalo de días
     if (intervaloMin) {
       filtered = filtered.filter(v => (v.intervaloDias || 0) >= parseInt(intervaloMin))
     }
     if (intervaloMax) {
       filtered = filtered.filter(v => (v.intervaloDias || 0) <= parseInt(intervaloMax))
     }
-    
     return filtered
   }, [vacunas, searchTerm, viaFilter, estadoFilter, intervaloMin, intervaloMax])
 
@@ -115,8 +99,6 @@ export default function VacunasPage() {
   if (error) return <ErrorMessage message={error.message} />
 
   const hayFiltrosActivos = searchTerm || viaFilter !== 'todos' || estadoFilter !== 'todos' || intervaloMin || intervaloMax
-
-  // Opciones para vía de aplicación
   const viasAplicacion = [...new Set(vacunas.map(v => v.viaAplicacion).filter(Boolean))]
 
   return (
@@ -130,28 +112,29 @@ export default function VacunasPage() {
 
       <PageAlert message={message} onClose={() => setMessage(null)} />
 
-      {/* Barra de búsqueda y filtros */}
       <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
           <TextField
             placeholder="Buscar por nombre o descripción..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             size="small"
             fullWidth
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: searchTerm && (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearchTerm('')}>
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchTerm('')}>
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
           
@@ -162,17 +145,11 @@ export default function VacunasPage() {
               </IconButton>
             </Tooltip>
             {hayFiltrosActivos && (
-              <Chip 
-                label="Limpiar filtros" 
-                size="small" 
-                onClick={limpiarFiltros}
-                onDelete={limpiarFiltros}
-              />
+              <Chip label="Limpiar filtros" size="small" onClick={limpiarFiltros} onDelete={limpiarFiltros} />
             )}
           </Box>
         </Stack>
 
-        {/* Filtros avanzados */}
         {showFilters && (
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
             {viasAplicacion.length > 0 && (
@@ -180,9 +157,7 @@ export default function VacunasPage() {
                 <InputLabel>Vía de Aplicación</InputLabel>
                 <Select value={viaFilter} onChange={(e) => setViaFilter(e.target.value)} label="Vía de Aplicación">
                   <MenuItem value="todos">Todas</MenuItem>
-                  {viasAplicacion.map(via => (
-                    <MenuItem key={via} value={via}>{via}</MenuItem>
-                  ))}
+                  {viasAplicacion.map(via => <MenuItem key={via} value={via}>{via}</MenuItem>)}
                 </Select>
               </FormControl>
             )}
@@ -204,7 +179,7 @@ export default function VacunasPage() {
               size="small"
               placeholder="Mínimo días"
               sx={{ width: 150 }}
-              InputProps={{ inputProps: { min: 0 } }}
+              inputProps={{ min: 0 }}
             />
 
             <TextField
@@ -215,12 +190,11 @@ export default function VacunasPage() {
               size="small"
               placeholder="Máximo días"
               sx={{ width: 150 }}
-              InputProps={{ inputProps: { min: 0 } }}
+              inputProps={{ min: 0 }}
             />
           </Stack>
         )}
 
-        {/* Indicador de resultados filtrados */}
         {hayFiltrosActivos && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
             {vacunasFiltradas.length} de {vacunas.length} vacunas encontradas
@@ -256,12 +230,8 @@ export default function VacunasPage() {
               <TableBody>
                 {vacunasFiltradas.map((v) => (
                   <TableRow key={v.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{v.nombre}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">{v.descripcion || '—'}</Typography>
-                    </TableCell>
+                    <TableCell><Typography variant="body2" sx={{ fontWeight: 600 }}>{v.nombre}</Typography></TableCell>
+                    <TableCell><Typography variant="body2" color="text.secondary">{v.descripcion || '—'}</Typography></TableCell>
                     <TableCell>{v.dosisRecomendada}</TableCell>
                     <TableCell>{v.viaAplicacion}</TableCell>
                     <TableCell>{v.intervaloDias} días</TableCell>

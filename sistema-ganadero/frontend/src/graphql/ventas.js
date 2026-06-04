@@ -99,7 +99,7 @@ export const GET_MUERTES_BAJAS = gql`
 `
 
 // ==========================================
-// MUTATIONS
+// MUTATIONS - CREAR
 // ==========================================
 
 export const CREATE_NOTA_VENTA = gql`
@@ -180,9 +180,85 @@ export const CREATE_MUERTE_BAJA = gql`
   }
 `
 
-export const DELETE_MUERTE_BAJA = gql`
-  mutation EliminarMuerteBaja($id: ID!) {
-    eliminarMuerteBaja(id: $id) {
+// ==========================================
+// MUTATIONS - ACTUALIZAR Y ELIMINAR VENTAS
+// ==========================================
+
+export const UPDATE_NOTA_VENTA = gql`
+  mutation ActualizarNotaVenta(
+    $id: ID!
+    $clienteId: ID
+    $fechaVenta: Date
+    $observaciones: String
+  ) {
+    actualizarNotaVenta(
+      id: $id
+      clienteId: $clienteId
+      fechaVenta: $fechaVenta
+      observaciones: $observaciones
+    ) {
+      notaVenta {
+        id
+        fechaVenta
+        observaciones
+        montoTotal
+        cliente {
+          id
+          nombre
+          apellidos
+          ci
+        }
+        detalles {
+          id
+          pesoVentaKg
+          subTotal
+          animal {
+            id
+            nroArete
+            nombre
+          }
+        }
+      }
+      success
+      message
+    }
+  }
+`
+
+export const DELETE_NOTA_VENTA = gql`
+  mutation EliminarNotaVenta($id: ID!) {
+    eliminarNotaVenta(id: $id) {
+      success
+      message
+    }
+  }
+`
+
+export const UPDATE_DETALLE_VENTA = gql`
+  mutation ActualizarDetalleVenta(
+    $id: ID!
+    $pesoVentaKg: Decimal
+    $precioKg: Decimal
+  ) {
+    actualizarDetalleVenta(
+      id: $id
+      pesoVentaKg: $pesoVentaKg
+      precioKg: $precioKg
+    ) {
+      detalleVenta {
+        id
+        pesoVentaKg
+        subTotal
+      }
+      success
+      message
+    }
+  }
+`
+
+export const DELETE_DETALLE_VENTA = gql`
+  mutation EliminarDetalleVenta($id: ID!) {
+    eliminarDetalleVenta(id: $id) {
       success
       message
     }
@@ -214,6 +290,15 @@ export const UPDATE_MUERTE_BAJA = gql`
         descripcion
         pesoEstimadoKg
       }
+      success
+      message
+    }
+  }
+`
+
+export const DELETE_MUERTE_BAJA = gql`
+  mutation EliminarMuerteBaja($id: ID!) {
+    eliminarMuerteBaja(id: $id) {
       success
       message
     }

@@ -27,13 +27,12 @@ import {
   Stack,
   IconButton,
   Tooltip,
-  Tabs,
-  Tab,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
+  Divider,
 } from '@mui/material'
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined'
 import SearchIcon from '@mui/icons-material/Search'
@@ -42,7 +41,8 @@ import FilterListIcon from '@mui/icons-material/FilterList'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
-import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import CloseIcon from '@mui/icons-material/Close'
 
 export default function ComprasPage() {
   const {
@@ -73,6 +73,9 @@ export default function ComprasPage() {
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [selectedCompra, setSelectedCompra] = useState(null)
 
   const [formData, setFormData] = useState({
     proveedorId: '',
@@ -171,6 +174,19 @@ export default function ComprasPage() {
             precioUnitario: detalle.precioUnitario,
             cantidad: detalle.cantidad,
           })
+        } else if (detalle.tipo === 'ANIMAL') {
+          await crearDetalleCompraAnimal({
+            notaCompraId: notaId,
+            nroArete: detalle.nroArete,
+            nombre: detalle.nombre,
+            sexo: detalle.sexo,
+            razaId: detalle.razaId || null,
+            categoriaId: detalle.categoriaId || null,
+            peso: detalle.peso ? parseFloat(detalle.peso) : null,
+            precioUnitario: parseFloat(detalle.precioUnitario),
+            fechaNacimiento: detalle.fechaNacimiento || null,
+            observaciones: detalle.observaciones || null,
+          })
         }
       }
       setMessage({ type: 'success', text: 'Compra registrada exitosamente' })
@@ -190,6 +206,11 @@ export default function ComprasPage() {
   }
 
   const handleAgregarAnimal = async (animalData) => {
+    if (!currentNotaId) {
+      setMessage({ type: 'error', text: 'Primero debe registrar la compra' })
+      setTimeout(() => setMessage(null), 3500)
+      return
+    }
     const result = await crearDetalleCompraAnimal({
       notaCompraId: currentNotaId,
       ...animalData,
@@ -209,6 +230,11 @@ export default function ComprasPage() {
       setMessage({ type: result.success ? 'success' : 'error', text: result.message })
       setTimeout(() => setMessage(null), 3500)
     }
+  }
+
+  const handleViewDetails = (compra) => {
+    setSelectedCompra(compra)
+    setDetailDialogOpen(true)
   }
 
   const filtrarCompras = (compra) => {
@@ -256,26 +282,28 @@ export default function ComprasPage() {
 
       {/* Filtros */}
       <Paper elevation={0} sx={{ p: 2, mb: 3, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <TextField
             placeholder="Buscar por proveedor u observación..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             size="small"
             fullWidth
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: searchTerm && (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearchTerm('')}>
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchTerm('')}>
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }
             }}
           />
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -288,7 +316,7 @@ export default function ComprasPage() {
         </Stack>
 
         {showFilters && (
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0' }}>
+          <Stack direction="row" spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0' }}>
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <InputLabel>Tipo</InputLabel>
               <Select value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)} label="Tipo">
@@ -305,7 +333,7 @@ export default function ComprasPage() {
               value={fechaInicio}
               onChange={(e) => setFechaInicio(e.target.value)}
               size="small"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               label="Fecha fin"
@@ -313,7 +341,7 @@ export default function ComprasPage() {
               value={fechaFin}
               onChange={(e) => setFechaFin(e.target.value)}
               size="small"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             {(searchTerm || tipoFilter !== 'todos' || fechaInicio || fechaFin) && (
               <Chip
@@ -335,6 +363,10 @@ export default function ComprasPage() {
             )}
           </Stack>
         )}
+        
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+          {comprasFiltradas.length} de {notasCompra.length} compras encontradas
+        </Typography>
       </Paper>
 
       {comprasFiltradas.length === 0 ? (
@@ -379,7 +411,14 @@ export default function ComprasPage() {
                 <TableRow key={compra.id} hover>
                   <TableCell>{new Date(compra.fechaCompra).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    {compra.proveedor?.nombre} {compra.proveedor?.apellidos || ''}
+                    <Typography variant="body2" fontWeight="500">
+                      {compra.proveedor?.nombre} {compra.proveedor?.apellidos || ''}
+                    </Typography>
+                    {compra.proveedor?.nit && (
+                      <Typography variant="caption" color="text.secondary">
+                        NIT: {compra.proveedor.nit}
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Chip
@@ -390,8 +429,10 @@ export default function ComprasPage() {
                         compra.tipoCompra === 'ANIMAL' ? '🐄 Animal' : '📋 Otro'
                       }
                       sx={{
-                        bgcolor: compra.tipoCompra === 'ANIMAL' ? '#e8f5e9' : '#f3e5f5',
-                        color: compra.tipoCompra === 'ANIMAL' ? '#2e7d32' : '#7b1fa2',
+                        bgcolor: compra.tipoCompra === 'ANIMAL' ? '#e8f5e9' : 
+                                 compra.tipoCompra === 'MEDICAMENTO' ? '#e3f2fd' : '#f3e5f5',
+                        color: compra.tipoCompra === 'ANIMAL' ? '#2e7d32' : 
+                               compra.tipoCompra === 'MEDICAMENTO' ? '#1565c0' : '#7b1fa2',
                       }}
                     />
                   </TableCell>
@@ -402,17 +443,27 @@ export default function ComprasPage() {
                   </TableCell>
                   <TableCell>{compra.observaciones || '—'}</TableCell>
                   <TableCell align="center">
-                    <IconButton size="small" color="primary" title="Editar">
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleEliminarNotaCompra(compra.id, compra.proveedor?.nombre)}
-                      title="Eliminar"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
+                      <Tooltip title="Ver detalles">
+                        <IconButton size="small" onClick={() => handleViewDetails(compra)} sx={{ color: '#3b82f6' }}>
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Editar">
+                        <IconButton size="small" sx={{ color: '#eab308' }}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Eliminar">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEliminarNotaCompra(compra.id, compra.proveedor?.nombre)}
+                          sx={{ color: '#ef4444' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))}
@@ -421,9 +472,17 @@ export default function ComprasPage() {
         </Paper>
       )}
 
-      {/* Modal de Nueva Compra */}
+      {/* MODAL DE NUEVA COMPRA - DIALOG TITLE CORREGIDO */}
       <Dialog open={showForm} onClose={() => setShowForm(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Nueva Compra</DialogTitle>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShoppingCartOutlinedIcon color="primary" />
+            <Typography variant="h6" component="span">🛒 Nueva Compra</Typography>
+          </Box>
+          <IconButton onClick={() => setShowForm(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1 }}>
             <form id="compra-form" onSubmit={handleCrearNotaCompra}>
@@ -565,45 +624,78 @@ export default function ComprasPage() {
                 </div>
               )}
 
+              {/* Detalles para Animales */}
+              {formData.tipoCompra === 'ANIMAL' && (
+                <div className="border-t pt-4">
+                  <CompraAnimalForm
+                    onSubmit={async (animalData) => {
+                      setDetalles([...detalles, {
+                        tipo: 'ANIMAL',
+                        ...animalData,
+                        nombre: animalData.nombre || animalData.nroArete,
+                        subtotal: animalData.precioUnitario
+                      }])
+                    }}
+                    onCancel={() => {}}
+                    razas={razas}
+                    categorias={categorias}
+                  />
+                </div>
+              )}
+
               {/* Tabla de detalles agregados */}
               {detalles.length > 0 && (
-                <div className="border-t pt-4">
+                <div className="border-t pt-4 mt-4">
                   <h4 className="font-semibold mb-2">Items agregados</h4>
-                  <table className="min-w-full border">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-2 py-1 text-left text-xs">Producto</th>
-                        <th className="px-2 py-1 text-left text-xs">Cantidad</th>
-                        <th className="px-2 py-1 text-left text-xs">Precio</th>
-                        <th className="px-2 py-1 text-left text-xs">Subtotal</th>
-                        <th className="px-2 py-1 text-center text-xs">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detalles.map((det, idx) => (
-                        <tr key={idx}>
-                          <td className="px-2 py-1 text-sm">{det.nombre}</td>
-                          <td className="px-2 py-1 text-sm">{det.cantidad}</td>
-                          <td className="px-2 py-1 text-sm">Bs. {det.precioUnitario.toLocaleString()}</td>
-                          <td className="px-2 py-1 text-sm">Bs. {det.subtotal.toLocaleString()}</td>
-                          <td className="px-2 py-1 text-center">
-                            <button
-                              type="button"
-                              onClick={() => eliminarDetalle(idx)}
-                              className="text-red-600 text-xs"
-                            >
-                              Eliminar
-                            </button>
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border rounded-lg">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium">Tipo</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium">Producto</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium">Cantidad / Arete</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium">Precio Unit.</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium">Subtotal</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium">Acción</th>
                         </tr>
-                      ))}
-                      <tr className="bg-gray-50 font-bold">
-                        <td colSpan="3" className="px-2 py-1 text-right">Total:</td>
-                        <td className="px-2 py-1">Bs. {detalles.reduce((sum, d) => sum + d.subtotal, 0).toLocaleString()}</td>
-                        <td></td>
-                      </tr>
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {detalles.map((det, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 text-sm">
+                              {det.tipo === 'MEDICAMENTO' ? '💊' : det.tipo === 'ALIMENTO' ? '🌾' : '🐄'}
+                            </td>
+                            <td className="px-3 py-2 text-sm font-medium">{det.nombre}</td>
+                            <td className="px-3 py-2 text-sm">
+                              {det.tipo === 'ANIMAL' ? det.nroArete : det.cantidad}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-right">
+                              Bs. {det.precioUnitario.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-right font-medium text-green-600">
+                              Bs. {det.subtotal.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => eliminarDetalle(idx)}
+                                className="text-red-600 hover:text-red-800 text-xs"
+                              >
+                                Eliminar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-gray-50 font-bold">
+                          <td colSpan="4" className="px-3 py-2 text-right">Total:</td>
+                          <td className="px-3 py-2 text-right text-green-600">
+                            Bs. {detalles.reduce((sum, d) => sum + d.subtotal, 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2"></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </form>
@@ -617,20 +709,159 @@ export default function ComprasPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Modal para agregar animales (cuando tipo es ANIMAL) */}
-      {showAnimalForm && (
-        <Dialog open={showAnimalForm} onClose={() => setShowAnimalForm(false)} maxWidth="md" fullWidth>
-          <DialogTitle>Agregar Animal a la Compra</DialogTitle>
-          <DialogContent>
-            <CompraAnimalForm
-              onSubmit={handleAgregarAnimal}
-              onCancel={() => setShowAnimalForm(false)}
-              razas={razas}
-              categorias={categorias}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* MODAL DE DETALLES DE LA COMPRA - DIALOG TITLE CORREGIDO */}
+      <Dialog open={detailDialogOpen} onClose={() => setDetailDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShoppingCartOutlinedIcon color="primary" />
+            <Typography variant="h6" component="span">Detalle de Compra #{selectedCompra?.id}</Typography>
+          </Box>
+          <IconButton onClick={() => setDetailDialogOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedCompra && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Typography variant="caption" color="text.secondary">Proveedor</Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {selectedCompra.proveedor?.nombre} {selectedCompra.proveedor?.apellidos || ''}
+                  </Typography>
+                  {selectedCompra.proveedor?.nit && (
+                    <Typography variant="body2" color="text.secondary">NIT: {selectedCompra.proveedor.nit}</Typography>
+                  )}
+                </div>
+                <div>
+                  <Typography variant="caption" color="text.secondary">Fecha de Compra</Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {new Date(selectedCompra.fechaCompra).toLocaleDateString('es-PY')}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={selectedCompra.tipoCompra === 'MEDICAMENTO' ? '💊 Medicamento' :
+                           selectedCompra.tipoCompra === 'ALIMENTO' ? '🍖 Alimento' :
+                           selectedCompra.tipoCompra === 'ANIMAL' ? '🐄 Animal' : '📋 Otro'}
+                    sx={{ mt: 0.5 }}
+                  />
+                </div>
+              </div>
+
+              <Divider />
+
+              {/* Medicamentos */}
+              {selectedCompra.detallesMedicamentos?.length > 0 && (
+                <>
+                  <Typography variant="subtitle1" fontWeight="bold">💊 Medicamentos</Typography>
+                  <table className="min-w-full border rounded-lg">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs">Medicamento</th>
+                        <th className="px-3 py-2 text-right text-xs">Cantidad</th>
+                        <th className="px-3 py-2 text-right text-xs">Precio Unit.</th>
+                        <th className="px-3 py-2 text-right text-xs">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCompra.detallesMedicamentos.map((det, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2 text-sm">{det.medicamento?.nombre}</td>
+                          <td className="px-3 py-2 text-sm text-right">{det.cantidad}</td>
+                          <td className="px-3 py-2 text-sm text-right">Bs. {parseFloat(det.precioUnitario).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-sm text-right">Bs. {parseFloat(det.subTotal).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Alimentos */}
+              {selectedCompra.detallesAlimentos?.length > 0 && (
+                <>
+                  <Typography variant="subtitle1" fontWeight="bold">🌾 Alimentos</Typography>
+                  <table className="min-w-full border rounded-lg">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs">Alimento</th>
+                        <th className="px-3 py-2 text-right text-xs">Cantidad</th>
+                        <th className="px-3 py-2 text-right text-xs">Precio Unit.</th>
+                        <th className="px-3 py-2 text-right text-xs">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCompra.detallesAlimentos.map((det, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2 text-sm">{det.alimento?.nombre}</td>
+                          <td className="px-3 py-2 text-sm text-right">{det.cantidad}</td>
+                          <td className="px-3 py-2 text-sm text-right">Bs. {parseFloat(det.precioUnitario).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-sm text-right">Bs. {parseFloat(det.subTotal).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Animales */}
+              {selectedCompra.detallesAnimales?.length > 0 && (
+                <>
+                  <Typography variant="subtitle1" fontWeight="bold">🐄 Animales</Typography>
+                  <table className="min-w-full border rounded-lg">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs">Arete</th>
+                        <th className="px-3 py-2 text-left text-xs">Nombre</th>
+                        <th className="px-3 py-2 text-left text-xs">Sexo</th>
+                        <th className="px-3 py-2 text-right text-xs">Peso</th>
+                        <th className="px-3 py-2 text-right text-xs">Precio Unit.</th>
+                        <th className="px-3 py-2 text-right text-xs">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCompra.detallesAnimales.map((det, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2 text-sm">{det.nroArete}</td>
+                          <td className="px-3 py-2 text-sm">{det.nombre || '—'}</td>
+                          <td className="px-3 py-2 text-sm">{det.sexo === 'MACHO' ? '🐂 Macho' : '🐄 Hembra'}</td>
+                          <td className="px-3 py-2 text-sm text-right">{det.peso || '—'} kg</td>
+                          <td className="px-3 py-2 text-sm text-right">Bs. {parseFloat(det.precioUnitario).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-sm text-right">Bs. {parseFloat(det.subTotal).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              <Divider />
+              
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="body2" color="text.secondary">Monto Total</Typography>
+                  <Typography variant="h5" fontWeight="bold" color="green">
+                    Bs. {parseFloat(selectedCompra.montoTotal).toLocaleString()}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {selectedCompra.observaciones && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Observaciones</Typography>
+                  <Typography variant="body2" sx={{ bgcolor: '#f5f5f5', p: 1.5, borderRadius: 1 }}>
+                    {selectedCompra.observaciones}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
+          <Button variant="contained" color="warning">Editar Compra</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

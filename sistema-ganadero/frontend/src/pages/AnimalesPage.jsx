@@ -25,8 +25,8 @@ import { useParcelasPaginadas } from '../hooks/useParcelasPaginadas'
 import { generarPDFAnimales, generarExcelAnimales } from '../services/reportesService'
 
 import {
-  Box, Card, CardContent, CardActions, Paper, CircularProgress,
-  Typography, Tabs, Tab, Chip, IconButton, Tooltip, Button, Grid,
+  Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
+  Typography, Tabs, Tab, Chip, IconButton, Tooltip, Button, CircularProgress,
 } from '@mui/material'
 import PetsOutlinedIcon         from '@mui/icons-material/PetsOutlined'
 import LocationOnOutlinedIcon   from '@mui/icons-material/LocationOnOutlined'
@@ -35,7 +35,6 @@ import DeleteOutlinedIcon       from '@mui/icons-material/DeleteOutlined'
 import AddOutlinedIcon          from '@mui/icons-material/AddOutlined'
 import InfoOutlinedIcon         from '@mui/icons-material/InfoOutlined'
 import GrassOutlinedIcon        from '@mui/icons-material/GrassOutlined'
-import ExitToAppOutlinedIcon    from '@mui/icons-material/ExitToAppOutlined'
 import RestartAltIcon           from '@mui/icons-material/RestartAlt'
 
 export default function AnimalesPage() {
@@ -188,7 +187,7 @@ export default function AnimalesPage() {
         </Tabs>
       </Box>
 
-      {/* ── ANIMALES ── */}
+      {/* ── ANIMALES (VISTA TABLA) ── */}
       {tabIdx === 0 && (
         <>
           {/* Toolbar: búsqueda + ordenamiento + limpiar + botón nuevo */}
@@ -224,7 +223,7 @@ export default function AnimalesPage() {
             onEstado={cambiarEstado}
           />
 
-          {/* Grid de tarjetas */}
+          {/* TABLA DE ANIMALES */}
           {loadingAnimales && animales.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress size={40} />
@@ -250,87 +249,87 @@ export default function AnimalesPage() {
               />
             )
           ) : (
-            <Box sx={{ position: 'relative' }}>
+            <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
               {loadingAnimales && (
                 <Box sx={{
                   position: 'absolute', inset: 0, bgcolor: 'rgba(255,255,255,0.6)',
                   zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 2,
                 }}>
                   <CircularProgress size={32} />
                 </Box>
               )}
-              <Grid container spacing={2}>
-                {animales.map(animal => (
-                  <Grid item xs={12} sm={6} lg={4} key={animal.id}>
-                    <Card elevation={0} sx={{
-                      border: '1px solid #E2E8F0', borderRadius: 2,
-                      height: '100%', display: 'flex', flexDirection: 'column',
-                      transition: 'box-shadow .2s',
-                      '&:hover': { boxShadow: 3 },
-                    }}>
-                      <CardContent sx={{ pb: 1 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                          <Box>
-                            <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
-                              #{animal.nroArete}
-                            </Typography>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              {animal.nombre || 'Sin nombre'}
-                            </Typography>
-                          </Box>
-                          <StatusChip value={animal.estado} />
-                        </Box>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, mt: 1 }}>
-                          {[
-                            ['Raza',       animal.raza?.nombre || 'N/A'],
-                            ['Categoría',  animal.categoria?.nombre || 'N/A'],
-                            ['Peso',       animal.peso ? `${animal.peso} kg` : 'N/A'],
-                            ['Sexo',       animal.sexo === 'MACHO' ? 'Macho' : 'Hembra'],
-                            ['Nacimiento', animal.fechaNacimiento
-                              ? new Date(animal.fechaNacimiento).toLocaleDateString('es-PY') : 'N/A'],
-                            ['Origen',     { NACIDO_FINCA: 'Nacido', COMPRADO: 'Comprado', DONADO: 'Donado' }[animal.origen] || 'N/A'],
-                          ].map(([k, v]) => (
-                            <Box key={k}>
-                              <Typography variant="caption" color="text.secondary">{k}</Typography>
-                              <Typography variant="body2" fontWeight={500}>{v}</Typography>
-                            </Box>
-                          ))}
-                        </Box>
-                      </CardContent>
-                      <CardActions sx={{ pt: 0, gap: 0.5, flexWrap: 'wrap' }}>
-                        <Button
-                          size="small" variant="outlined" color="info"
-                          startIcon={<LocationOnOutlinedIcon />}
-                          onClick={() => { setSelectedAnimal(animal); setShowMoverForm(true) }}
-                          sx={{ fontSize: 11, textTransform: 'none' }}
-                        >
-                          Mover a Parcela
-                        </Button>
-                        <Tooltip title="Ver detalle">
-                          <IconButton size="small" color="primary"
-                            onClick={() => setDetailAnimalId(animal.id)}>
-                            <InfoOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Editar">
-                          <IconButton size="small" color="warning"
-                            onClick={() => { setEditAnimal(animal); setShowAnimalForm(true) }}>
-                            <EditOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Eliminar">
-                          <IconButton size="small" color="error"
-                            onClick={() => { setConfirmAnimalId(animal.id); setConfirmName(animal.nombre || animal.nroArete) }}>
-                            <DeleteOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </CardActions>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                      <TableCell sx={{ fontWeight: 600 }}>Arete</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Nombre</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Sexo</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Raza</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Categoría</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Peso (kg)</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="center">Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {animales.map((animal) => (
+                      <TableRow key={animal.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>{animal.nroArete}</Typography>
+                        </TableCell>
+                        <TableCell>{animal.nombre || '—'}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            size="small" 
+                            label={animal.sexo === 'MACHO' ? 'Macho' : 'Hembra'}
+                            sx={{ bgcolor: animal.sexo === 'MACHO' ? '#E3F2FD' : '#FCE4EC', color: animal.sexo === 'MACHO' ? '#1565C0' : '#C62828' }}
+                          />
+                        </TableCell>
+                        <TableCell>{animal.raza?.nombre || '—'}</TableCell>
+                        <TableCell>{animal.categoria?.nombre || '—'}</TableCell>
+                        <TableCell>{animal.peso ? `${animal.peso} kg` : '—'}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            size="small" 
+                            label={animal.estado}
+                            sx={{ 
+                              bgcolor: animal.estado === 'ACTIVO' ? '#E8F5E9' : animal.estado === 'VENDIDO' ? '#FFF3E0' : '#FFEBEE',
+                              color: animal.estado === 'ACTIVO' ? '#2E7D32' : animal.estado === 'VENDIDO' ? '#E65100' : '#C62828'
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="Mover a Parcela">
+                            <IconButton
+                              size="small" color="primary"
+                              onClick={() => { setSelectedAnimal(animal); setShowMoverForm(true) }}
+                            >
+                              <LocationOnOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Ver detalle">
+                            <IconButton size="small" color="info" onClick={() => setDetailAnimalId(animal.id)}>
+                              <InfoOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Editar">
+                            <IconButton size="small" color="warning" onClick={() => { setEditAnimal(animal); setShowAnimalForm(true) }}>
+                              <EditOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Eliminar">
+                            <IconButton size="small" color="error" onClick={() => { setConfirmAnimalId(animal.id); setConfirmName(animal.nombre || animal.nroArete) }}>
+                              <DeleteOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            </Paper>
           )}
 
           {/* Paginación */}
@@ -348,7 +347,7 @@ export default function AnimalesPage() {
         </>
       )}
 
-      {/* ── PARCELAS ── */}
+      {/* ── PARCELAS (mantiene el mismo diseño de tarjetas) ── */}
       {tabIdx === 1 && (
         <>
           {/* Toolbar: búsqueda + ordenamiento + limpiar + botón nuevo */}
@@ -390,7 +389,7 @@ export default function AnimalesPage() {
             onTemporal={cambiarTemporalParcela}
           />
 
-          {/* Contenido: loading / vacío / grid */}
+          {/* Contenido: loading / vacío / grid de tarjetas */}
           {loadingParcelasPaginadas && parcelasPaginadas.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress size={40} />
@@ -424,81 +423,61 @@ export default function AnimalesPage() {
                   <CircularProgress size={32} />
                 </Box>
               )}
-              <Grid container spacing={2}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
                 {parcelasPaginadas.map(parcela => (
-                  <Grid item xs={12} md={6} key={parcela.id}>
-                    <Card elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
-                      <Box sx={{ background: 'linear-gradient(135deg,#2E7D32,#1B5E20)', px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="subtitle2" fontWeight={700} color="#fff">{parcela.nombre}</Typography>
-                        <StatusChip value={parcela.estado} />
+                  <Box key={parcela.id} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden', bgcolor: 'white' }}>
+                    <Box sx={{ background: 'linear-gradient(135deg,#2E7D32,#1B5E20)', px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="subtitle2" fontWeight={700} color="#fff">{parcela.nombre}</Typography>
+                      <StatusChip value={parcela.estado} />
+                    </Box>
+                    <Box sx={{ p: 2 }}>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1.5 }}>
+                        <Box><Typography variant="caption" color="text.secondary">Tamaño</Typography><Typography variant="body2" fontWeight={600}>{parcela.tamano} ha</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Capacidad</Typography><Typography variant="body2" fontWeight={600}>{parcela.capacidadMaxima} animales</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Pastura</Typography><Typography variant="body2" fontWeight={600}>{parcela.tipoPastura || 'N/A'}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Ocupación</Typography><Typography variant="body2" fontWeight={600}>{parcela.ocupacionActual ?? parcela.animalesActuales?.length ?? 0} / {parcela.capacidadMaxima}</Typography></Box>
                       </Box>
-                      <CardContent>
-                        <Grid container spacing={1} sx={{ mb: 1.5 }}>
-                          {[
-                            ['Tamaño',    `${parcela.tamano} ha`],
-                            ['Capacidad', `${parcela.capacidadMaxima} animales`],
-                            ['Pastura',   parcela.tipoPastura || 'N/A'],
-                            ['Ocupación', `${parcela.ocupacionActual ?? parcela.animalesActuales?.length ?? 0} / ${parcela.capacidadMaxima}`],
-                          ].map(([k, v]) => (
-                            <Grid item xs={6} key={k}>
-                              <Typography variant="caption" color="text.secondary">{k}</Typography>
-                              <Typography variant="body2" fontWeight={600}>{v}</Typography>
-                            </Grid>
-                          ))}
-                        </Grid>
 
-                        {(() => {
-                          const ocu = parcela.ocupacionActual ?? parcela.animalesActuales?.length ?? 0
-                          const cap = parcela.capacidadMaxima
-                          if (!cap) return null
-                          if (ocu > cap) return <Chip label="Sobreocupado" size="small" color="error" sx={{ mb: 1 }} />
-                          if (ocu >= cap) return <Chip label="Capacidad completa" size="small" color="warning" sx={{ mb: 1 }} />
-                          return null
-                        })()}
+                      {(() => {
+                        const ocu = parcela.ocupacionActual ?? parcela.animalesActuales?.length ?? 0
+                        const cap = parcela.capacidadMaxima
+                        if (!cap) return null
+                        if (ocu > cap) return <Chip label="Sobreocupado" size="small" color="error" sx={{ mb: 1 }} />
+                        if (ocu >= cap) return <Chip label="Capacidad completa" size="small" color="warning" sx={{ mb: 1 }} />
+                        return null
+                      })()}
 
-                        {parcela.animalesActuales?.length > 0 && (
-                          <Box sx={{ borderTop: '1px solid #F1F5F9', pt: 1.5 }}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary"
-                              sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                              Animales actuales
-                            </Typography>
-                            {parcela.animalesActuales.map(item => (
-                              <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#F8FAFC', borderRadius: 1, p: 0.75, mt: 0.75 }}>
-                                <Box>
-                                  <Typography variant="body2" fontWeight={600}>{item.animal?.nroArete}</Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Desde: {new Date(item.fechaIngreso).toLocaleDateString('es-PY')}
-                                  </Typography>
-                                </Box>
-                                <Tooltip title="Retirar animal">
-                                  <IconButton size="small" color="error" onClick={() => setConfirmSacarId(item.id)}>
-                                    <ExitToAppOutlinedIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
+                      {parcela.animalesActuales?.length > 0 && (
+                        <Box sx={{ borderTop: '1px solid #F1F5F9', pt: 1.5, mt: 1 }}>
+                          <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Animales actuales
+                          </Typography>
+                          {parcela.animalesActuales.map(item => (
+                            <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#F8FAFC', borderRadius: 1, p: 0.75, mt: 0.75 }}>
+                              <Box>
+                                <Typography variant="body2" fontWeight={600}>{item.animal?.nroArete}</Typography>
+                                <Typography variant="caption" color="text.secondary">Desde: {new Date(item.fechaIngreso).toLocaleDateString('es-PY')}</Typography>
                               </Box>
-                            ))}
-                          </Box>
-                        )}
-
-                        <Box sx={{ display: 'flex', gap: 1, mt: 1.5, justifyContent: 'flex-end' }}>
-                          <Tooltip title="Editar">
-                            <IconButton size="small" color="warning"
-                              onClick={() => { setEditParcela(parcela); setShowParcelaForm(true) }}>
-                              <EditOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Eliminar">
-                            <IconButton size="small" color="error"
-                              onClick={() => { setConfirmParcelaId(parcela.id); setConfirmName(parcela.nombre) }}>
-                              <DeleteOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                              <IconButton size="small" color="error" onClick={() => setConfirmSacarId(item.id)}>
+                                <LocationOnOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          ))}
                         </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                      )}
+
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5, justifyContent: 'flex-end' }}>
+                        <IconButton size="small" color="warning" onClick={() => { setEditParcela(parcela); setShowParcelaForm(true) }}>
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={() => { setConfirmParcelaId(parcela.id); setConfirmName(parcela.nombre) }}>
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
             </Box>
           )}
 

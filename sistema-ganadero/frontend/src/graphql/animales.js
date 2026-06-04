@@ -1,3 +1,4 @@
+// frontend/src/graphql/animales.js
 import { gql } from '@apollo/client'
 
 // ==========================================
@@ -201,7 +202,6 @@ export const CREATE_ANIMAL = gql`
     $sexo: String!
     $razaId: ID
     $categoriaId: ID
-    $estado: String
     $fechaNacimiento: Date
     $fechaIngreso: Date
     $edadIngresoMeses: Int

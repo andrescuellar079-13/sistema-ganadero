@@ -1,13 +1,20 @@
+// frontend/src/components/AnimalSearchBar.jsx
 import { useState, useEffect, useRef } from 'react'
 import { InputAdornment, TextField, IconButton, Tooltip } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import ClearIcon from '@mui/icons-material/Clear'
 
-export default function AnimalSearchBar({ value, onChange, placeholder = 'Buscar por nombre, arete, raza, categoría o estado...' }) {
+export default function AnimalSearchBar({ 
+  value, 
+  onChange, 
+  placeholder = 'Buscar por nombre, arete, raza, categoría o estado...',
+  disabled = false,
+  fullWidth = true,
+  size = 'small'
+}) {
   const [inputValue, setInputValue] = useState(value || '')
   const timerRef = useRef(null)
 
-  // Sync external resets (limpiarFiltros)
   useEffect(() => {
     if (value === '' && inputValue !== '') {
       setInputValue('')
@@ -33,8 +40,9 @@ export default function AnimalSearchBar({ value, onChange, placeholder = 'Buscar
 
   return (
     <TextField
-      fullWidth
-      size="small"
+      fullWidth={fullWidth}
+      size={size}
+      disabled={disabled}
       value={inputValue}
       onChange={handleChange}
       placeholder={placeholder}
@@ -53,10 +61,11 @@ export default function AnimalSearchBar({ value, onChange, placeholder = 'Buscar
             </Tooltip>
           </InputAdornment>
         ) : null,
-        sx: { borderRadius: 2, bgcolor: 'background.paper' },
       }}
       sx={{
         '& .MuiOutlinedInput-root': {
+          borderRadius: 2,
+          bgcolor: 'background.paper',
           '&:hover fieldset': { borderColor: 'primary.main' },
           '&.Mui-focused fieldset': { borderWidth: 2 },
         },
