@@ -214,6 +214,84 @@ export const GET_CATEGORIAS = gql`
   }
 `
 
+export const EXPORTAR_ANIMALES = gql`
+  query ExportarAnimales(
+    $fincaId: ID!
+    $tipoReporte: String
+    $estado: String
+    $sexo: String
+    $razaId: ID
+    $categoriaId: ID
+    $tipoProduccion: String
+    $origen: String
+    $parcelaId: ID
+    $fechaNacimientoDesde: Date
+    $fechaNacimientoHasta: Date
+    $fechaIngresoDesde: Date
+    $fechaIngresoHasta: Date
+    $fechaVentaDesde: Date
+    $fechaVentaHasta: Date
+    $fechaBajaDesde: Date
+    $fechaBajaHasta: Date
+    $limite: Int
+    $orden: String
+  ) {
+    exportarAnimales(
+      fincaId: $fincaId
+      tipoReporte: $tipoReporte
+      estado: $estado
+      sexo: $sexo
+      razaId: $razaId
+      categoriaId: $categoriaId
+      tipoProduccion: $tipoProduccion
+      origen: $origen
+      parcelaId: $parcelaId
+      fechaNacimientoDesde: $fechaNacimientoDesde
+      fechaNacimientoHasta: $fechaNacimientoHasta
+      fechaIngresoDesde: $fechaIngresoDesde
+      fechaIngresoHasta: $fechaIngresoHasta
+      fechaVentaDesde: $fechaVentaDesde
+      fechaVentaHasta: $fechaVentaHasta
+      fechaBajaDesde: $fechaBajaDesde
+      fechaBajaHasta: $fechaBajaHasta
+      limite: $limite
+      orden: $orden
+    ) {
+      total
+      mensaje
+      items {
+        nroArete
+        nombre
+        sexo
+        razaNombre
+        categoriaNombre
+        peso
+        fechaNacimiento
+        edadMeses
+        tipoProduccion
+        origen
+        estado
+        parcelaActual
+        fechaIngreso
+        padreArete
+        madreArete
+        observaciones
+        fechaVenta
+        clienteNombre
+        pesoVenta
+        precioUnitario
+        subTotal
+        guiaSalida
+        fechaBaja
+        tipoBaja
+        causaBaja
+        pesoEstimadoBaja
+        descripcionBaja
+      }
+    }
+  }
+`
+
 // ==========================================
 // MUTATIONS
 // ==========================================

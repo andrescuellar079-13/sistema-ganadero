@@ -139,6 +139,149 @@ export const generarExcelVentas = (ventas, fincaNombre) => {
   saveAs(blob, `reporte_ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
 }
 
+// ==========================================
+// EXPORTACIÓN MODAL DE ANIMALES (con columnas y filtros seleccionables)
+// ==========================================
+
+const ETIQUETAS_COLUMNAS = {
+  nroArete:       'Arete',
+  nombre:         'Nombre',
+  sexo:           'Sexo',
+  razaNombre:     'Raza',
+  categoriaNombre:'Categoría',
+  peso:           'Peso (kg)',
+  fechaNacimiento:'Fecha Nac.',
+  edadMeses:      'Edad (meses)',
+  tipoProduccion: 'Tipo Producción',
+  origen:         'Origen',
+  estado:         'Estado',
+  parcelaActual:  'Parcela actual',
+  fechaIngreso:   'Fecha ingreso',
+  padreArete:     'Padre (arete)',
+  madreArete:     'Madre (arete)',
+  observaciones:  'Observaciones',
+  fechaVenta:     'Fecha venta',
+  clienteNombre:  'Cliente',
+  pesoVenta:      'Peso venta (kg)',
+  precioUnitario: 'Precio unitario',
+  subTotal:       'Subtotal',
+  guiaSalida:     'Guía salida',
+  fechaBaja:      'Fecha baja',
+  tipoBaja:       'Tipo baja',
+  causaBaja:      'Causa',
+  pesoEstimadoBaja:'Peso estimado (kg)',
+  descripcionBaja:'Descripción baja',
+}
+
+function formatearValorCelda(key, value) {
+  if (value == null) return '-'
+  if (key === 'sexo') return value === 'MACHO' ? 'Macho' : 'Hembra'
+  if (key === 'tipoProduccion') {
+    return value === 'DOBLE_PROPOSITO' ? 'Doble propósito' : value === 'CARNE' ? 'Carne' : 'Leche'
+  }
+  if (key === 'origen') {
+    return value === 'NACIDO_FINCA' ? 'Nac. finca' : value === 'COMPRADO' ? 'Comprado' : 'Donado'
+  }
+  if ((key === 'fechaNacimiento' || key === 'fechaIngreso' || key === 'fechaVenta' || key === 'fechaBaja') && value) {
+    return value.split('-').reverse().join('/')
+  }
+  if ((key === 'peso' || key === 'pesoVenta' || key === 'pesoEstimadoBaja') && value != null) {
+    return `${parseFloat(value).toFixed(2)} kg`
+  }
+  if ((key === 'precioUnitario' || key === 'subTotal') && value != null) {
+    return `Gs. ${parseFloat(value).toLocaleString('es-PY')}`
+  }
+  return String(value)
+}
+
+function buildFilasExport(items, columnas) {
+  return items.map(item =>
+    columnas.map(col => formatearValorCelda(col, item[col]))
+  )
+}
+
+function buildEncabezado(columnas) {
+  return columnas.map(col => ETIQUETAS_COLUMNAS[col] || col)
+}
+
+export const generarReporteAnimalesPDF = (items, columnas, config = {}) => {
+  const { titulo = 'Reporte de Animales', finca = '', fechaGeneracion = new Date().toLocaleString('es-PY') } = config
+
+  const encabezado = buildEncabezado(columnas)
+  const filas = buildFilasExport(items, columnas)
+
+  const orientacion = columnas.length > 9 ? 'landscape' : 'portrait'
+  const doc = new jsPDF(orientacion)
+
+  let y = 15
+  doc.setFontSize(16)
+  doc.setFont(undefined, 'bold')
+  doc.text(titulo, 14, y)
+  y += 8
+
+  if (finca) {
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'normal')
+    doc.text(`Finca: ${finca}`, 14, y)
+    y += 6
+  }
+
+  doc.setFontSize(9)
+  doc.text(`Generado: ${fechaGeneracion}`, 14, y)
+  y += 5
+  doc.text(`Total de registros: ${items.length}`, 14, y)
+  y += 4
+
+  autoTable(doc, {
+    head: [encabezado],
+    body: filas,
+    startY: y + 4,
+    theme: 'striped',
+    headStyles: { fillColor: [34, 197, 94], fontSize: 8, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 7.5 },
+    alternateRowStyles: { fillColor: [245, 251, 245] },
+    margin: { left: 10, right: 10 },
+    styles: { overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: columnas.reduce((acc, col, i) => {
+      if (['observaciones', 'descripcionBaja', 'causaBaja'].includes(col)) {
+        acc[i] = { cellWidth: 35 }
+      }
+      return acc
+    }, {}),
+  })
+
+  const fechaArchivo = new Date().toISOString().split('T')[0]
+  doc.save(`reporte_animales_${fechaArchivo}.pdf`)
+}
+
+export const generarReporteAnimalesExcel = (items, columnas, config = {}) => {
+  const { titulo = 'Reporte de Animales', finca = '', fechaGeneracion = new Date().toLocaleString('es-PY') } = config
+
+  const encabezado = buildEncabezado(columnas)
+  const filas = buildFilasExport(items, columnas)
+
+  const datos = [
+    [titulo],
+    finca ? [`Finca: ${finca}`] : [],
+    [`Generado: ${fechaGeneracion}`],
+    [`Total de registros: ${items.length}`],
+    [],
+    encabezado,
+    ...filas,
+  ].filter(r => r.length > 0 || true)
+
+  const ws = XLSX.utils.aoa_to_sheet(datos)
+  ws['!cols'] = encabezado.map(() => ({ wch: 18 }))
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Animales')
+
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([buf], { type: 'application/octet-stream' })
+  const fechaArchivo = new Date().toISOString().split('T')[0]
+  saveAs(blob, `reporte_animales_${fechaArchivo}.xlsx`)
+}
+
 export const generarExcelProduccion = (producciones, fincaNombre) => {
   const data = producciones.map(p => ({
     'Fecha': new Date(p.fecha).toLocaleDateString(),

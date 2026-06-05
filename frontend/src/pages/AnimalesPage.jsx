@@ -14,6 +14,7 @@ import AnimalDetailModal        from '../components/AnimalDetailModal'
 import ParcelaForm              from '../components/ParcelaForm'
 import MoverAnimalForm          from '../components/MoverAnimalForm'
 import ReportesButtons          from '../components/ReportesButtons'
+import ExportarAnimalesModal    from '../components/ExportarAnimalesModal'
 import AnimalSearchBar          from '../components/AnimalSearchBar'
 import AnimalFilters            from '../components/AnimalFilters'
 import AnimalSortSelect         from '../components/AnimalSortSelect'
@@ -22,7 +23,6 @@ import ParcelaFilters           from '../components/ParcelaFilters'
 import ParcelaSortSelect        from '../components/ParcelaSortSelect'
 import PaginationControls       from '../components/PaginationControls'
 import { useParcelasPaginadas } from '../hooks/useParcelasPaginadas'
-import { generarPDFAnimales, generarExcelAnimales } from '../services/reportesService'
 
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
@@ -38,7 +38,7 @@ import GrassOutlinedIcon        from '@mui/icons-material/GrassOutlined'
 import RestartAltIcon           from '@mui/icons-material/RestartAlt'
 
 export default function AnimalesPage() {
-  const { animales: todosAnimales, razas, categorias, crearAnimal, actualizarAnimal, eliminarAnimal } = useAnimales()
+  const { razas, categorias, crearAnimal, actualizarAnimal, eliminarAnimal } = useAnimales()
   const { parcelas, crearParcela, actualizarParcela, eliminarParcela, moverAnimalAParcela, sacarAnimalDeParcela, loading: loadingP } = useParcelas()
   const { fincaActual } = useFincas()
 
@@ -93,8 +93,9 @@ export default function AnimalesPage() {
   const [confirmParcelaId, setConfirmParcelaId] = useState(null)
   const [confirmName, setConfirmName]       = useState('')
   const [confirmSacarId, setConfirmSacarId]  = useState(null)
-  const [reporteLoading, setReporteLoading]  = useState(false)
   const [detailAnimalId, setDetailAnimalId]  = useState(null)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportFormato, setExportFormato]     = useState('PDF')
 
   const notify = (r) => {
     setMessage({ type: r.success ? 'success' : 'error', text: r.message })
@@ -146,15 +147,13 @@ export default function AnimalesPage() {
     if (r.success) refetchParcelasPaginadas()
   }
 
-  const handlePDF = async () => {
-    setReporteLoading(true)
-    try { generarPDFAnimales(todosAnimales, fincaActual?.nombre || 'Mi Finca') } catch (e) { console.error(e) }
-    setReporteLoading(false)
+  const handlePDF = () => {
+    setExportFormato('PDF')
+    setShowExportModal(true)
   }
-  const handleExcel = async () => {
-    setReporteLoading(true)
-    try { generarExcelAnimales(todosAnimales, fincaActual?.nombre || 'Mi Finca') } catch (e) { console.error(e) }
-    setReporteLoading(false)
+  const handleExcel = () => {
+    setExportFormato('EXCEL')
+    setShowExportModal(true)
   }
 
   const hayFiltrosActivos =
@@ -177,7 +176,7 @@ export default function AnimalesPage() {
           </Typography>
         </Box>
         {tabIdx === 0 && (
-          <ReportesButtons onPDF={handlePDF} onExcel={handleExcel} loading={reporteLoading} />
+          <ReportesButtons onPDF={handlePDF} onExcel={handleExcel} loading={false} />
         )}
       </Box>
 
@@ -549,6 +548,30 @@ export default function AnimalesPage() {
           />
         </>
       )}
+
+      {/* Modal de exportación */}
+      <ExportarAnimalesModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        formatoPredefinido={exportFormato}
+        fincaId={fincaId}
+        fincaNombre={fincaActual?.nombre || 'Mi Finca'}
+        razas={razas}
+        categorias={categorias}
+        parcelas={parcelas}
+        filtrosActuales={{
+          estado,
+          sexo,
+          razaId: null,
+          categoriaId: null,
+          tipoProduccion,
+          origen,
+          fechaNacimientoDesde,
+          fechaNacimientoHasta,
+          fechaIngresoDesde,
+          fechaIngresoHasta,
+        }}
+      />
 
       {/* Form overlays */}
       {showAnimalForm && (

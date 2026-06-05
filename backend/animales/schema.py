@@ -245,6 +245,44 @@ class ParcelasPaginadasType(graphene.ObjectType):
     has_previous = graphene.Boolean()
 
 
+class AnimalExportItemType(graphene.ObjectType):
+    nro_arete = graphene.String()
+    nombre = graphene.String()
+    sexo = graphene.String()
+    raza_nombre = graphene.String()
+    categoria_nombre = graphene.String()
+    peso = graphene.Decimal()
+    fecha_nacimiento = graphene.Date()
+    edad_meses = graphene.Int()
+    tipo_produccion = graphene.String()
+    origen = graphene.String()
+    estado = graphene.String()
+    parcela_actual = graphene.String()
+    fecha_ingreso = graphene.Date()
+    padre_arete = graphene.String()
+    madre_arete = graphene.String()
+    observaciones = graphene.String()
+    # Campos para reporte de vendidos
+    fecha_venta = graphene.Date()
+    cliente_nombre = graphene.String()
+    peso_venta = graphene.Decimal()
+    precio_unitario = graphene.Decimal()
+    sub_total = graphene.Decimal()
+    guia_salida = graphene.String()
+    # Campos para reporte de bajas/muertes
+    fecha_baja = graphene.Date()
+    tipo_baja = graphene.String()
+    causa_baja = graphene.String()
+    peso_estimado_baja = graphene.Decimal()
+    descripcion_baja = graphene.String()
+
+
+class ExportarAnimalesResultType(graphene.ObjectType):
+    items = graphene.List(AnimalExportItemType)
+    total = graphene.Int()
+    mensaje = graphene.String()
+
+
 # ==========================================
 # HELPER DE FILTROS (función auxiliar fuera de la clase)
 # ==========================================
@@ -455,6 +493,28 @@ class Query(graphene.ObjectType):
         fecha_ingreso_hasta=graphene.Date(),
         fecha_registro_desde=graphene.Date(),
         fecha_registro_hasta=graphene.Date(),
+    )
+    exportar_animales = graphene.Field(
+        ExportarAnimalesResultType,
+        finca_id=graphene.ID(required=True),
+        tipo_reporte=graphene.String(),
+        estado=graphene.String(),
+        sexo=graphene.String(),
+        raza_id=graphene.ID(),
+        categoria_id=graphene.ID(),
+        tipo_produccion=graphene.String(),
+        origen=graphene.String(),
+        parcela_id=graphene.ID(),
+        fecha_nacimiento_desde=graphene.Date(),
+        fecha_nacimiento_hasta=graphene.Date(),
+        fecha_ingreso_desde=graphene.Date(),
+        fecha_ingreso_hasta=graphene.Date(),
+        fecha_venta_desde=graphene.Date(),
+        fecha_venta_hasta=graphene.Date(),
+        fecha_baja_desde=graphene.Date(),
+        fecha_baja_hasta=graphene.Date(),
+        limite=graphene.Int(),
+        orden=graphene.String(),
     )
 
     # ---- resolvers ----
@@ -904,6 +964,213 @@ class Query(graphene.ObjectType):
             por_raza=por_raza,
             por_categoria=por_categoria,
             descripcion=descripcion,
+        )
+
+    def resolve_exportar_animales(
+        self, info,
+        finca_id,
+        tipo_reporte=None,
+        estado=None,
+        sexo=None,
+        raza_id=None,
+        categoria_id=None,
+        tipo_produccion=None,
+        origen=None,
+        parcela_id=None,
+        fecha_nacimiento_desde=None,
+        fecha_nacimiento_hasta=None,
+        fecha_ingreso_desde=None,
+        fecha_ingreso_hasta=None,
+        fecha_venta_desde=None,
+        fecha_venta_hasta=None,
+        fecha_baja_desde=None,
+        fecha_baja_hasta=None,
+        limite=None,
+        orden=None,
+    ):
+        from datetime import date as hoy_date
+        from comercio.models import DetalleVenta, MuerteBaja
+
+        limite = max(1, min(limite or 500, 5000))
+        tipo_reporte = tipo_reporte or 'INVENTARIO'
+        items = []
+
+        def calcular_edad_meses(fecha_nac):
+            if not fecha_nac:
+                return None
+            return (hoy_date.today() - fecha_nac).days // 30
+
+        def _filtrar_animal_qs(qs):
+            if sexo and sexo not in ('', 'TODOS'):
+                qs = qs.filter(sexo=sexo)
+            if raza_id:
+                qs = qs.filter(raza_id=raza_id)
+            if categoria_id:
+                qs = qs.filter(categoria_id=categoria_id)
+            if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+                qs = qs.filter(tipo_produccion=tipo_produccion)
+            if origen and origen not in ('', 'TODOS'):
+                qs = qs.filter(origen=origen)
+            if fecha_nacimiento_desde:
+                qs = qs.filter(fecha_nacimiento__gte=fecha_nacimiento_desde)
+            if fecha_nacimiento_hasta:
+                qs = qs.filter(fecha_nacimiento__lte=fecha_nacimiento_hasta)
+            if fecha_ingreso_desde:
+                qs = qs.filter(fecha_ingreso__gte=fecha_ingreso_desde)
+            if fecha_ingreso_hasta:
+                qs = qs.filter(fecha_ingreso__lte=fecha_ingreso_hasta)
+            return qs
+
+        if tipo_reporte == 'VENDIDOS':
+            qs = DetalleVenta.objects.filter(
+                nota_venta__finca_id=finca_id
+            ).select_related(
+                'animal', 'animal__raza', 'animal__categoria',
+                'animal__padre', 'animal__madre',
+                'nota_venta', 'nota_venta__cliente'
+            )
+            if fecha_venta_desde:
+                qs = qs.filter(nota_venta__fecha_venta__gte=fecha_venta_desde)
+            if fecha_venta_hasta:
+                qs = qs.filter(nota_venta__fecha_venta__lte=fecha_venta_hasta)
+            if sexo and sexo not in ('', 'TODOS'):
+                qs = qs.filter(animal__sexo=sexo)
+            if raza_id:
+                qs = qs.filter(animal__raza_id=raza_id)
+            if categoria_id:
+                qs = qs.filter(animal__categoria_id=categoria_id)
+            if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+                qs = qs.filter(animal__tipo_produccion=tipo_produccion)
+            if origen and origen not in ('', 'TODOS'):
+                qs = qs.filter(animal__origen=origen)
+            if fecha_nacimiento_desde:
+                qs = qs.filter(animal__fecha_nacimiento__gte=fecha_nacimiento_desde)
+            if fecha_nacimiento_hasta:
+                qs = qs.filter(animal__fecha_nacimiento__lte=fecha_nacimiento_hasta)
+            qs = qs.order_by('-nota_venta__fecha_venta')[:limite]
+            for dv in qs:
+                a = dv.animal
+                nv = dv.nota_venta
+                cliente_str = None
+                if nv.cliente:
+                    cliente_str = f"{nv.cliente.nombre} {nv.cliente.apellidos or ''}".strip()
+                items.append(AnimalExportItemType(
+                    nro_arete=a.nro_arete, nombre=a.nombre, sexo=a.sexo,
+                    raza_nombre=a.raza.nombre if a.raza else None,
+                    categoria_nombre=a.categoria.nombre if a.categoria else None,
+                    peso=a.peso, fecha_nacimiento=a.fecha_nacimiento,
+                    edad_meses=calcular_edad_meses(a.fecha_nacimiento),
+                    tipo_produccion=a.tipo_produccion, origen=a.origen, estado=a.estado,
+                    parcela_actual=None, fecha_ingreso=a.fecha_ingreso,
+                    padre_arete=a.padre.nro_arete if a.padre else None,
+                    madre_arete=a.madre.nro_arete if a.madre else None,
+                    observaciones=a.observaciones,
+                    fecha_venta=nv.fecha_venta, cliente_nombre=cliente_str,
+                    peso_venta=dv.peso_venta_kg, precio_unitario=dv.precio_unitario,
+                    sub_total=dv.sub_total, guia_salida=nv.guia_salida,
+                ))
+
+        elif tipo_reporte in ('MUERTOS', 'BAJAS'):
+            qs = MuerteBaja.objects.filter(finca_id=finca_id).select_related(
+                'animal', 'animal__raza', 'animal__categoria',
+                'animal__padre', 'animal__madre'
+            )
+            if tipo_reporte == 'MUERTOS':
+                qs = qs.filter(tipo='MUERTE')
+            if fecha_baja_desde:
+                qs = qs.filter(fecha_baja__gte=fecha_baja_desde)
+            if fecha_baja_hasta:
+                qs = qs.filter(fecha_baja__lte=fecha_baja_hasta)
+            if sexo and sexo not in ('', 'TODOS'):
+                qs = qs.filter(animal__sexo=sexo)
+            if raza_id:
+                qs = qs.filter(animal__raza_id=raza_id)
+            if categoria_id:
+                qs = qs.filter(animal__categoria_id=categoria_id)
+            if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+                qs = qs.filter(animal__tipo_produccion=tipo_produccion)
+            if origen and origen not in ('', 'TODOS'):
+                qs = qs.filter(animal__origen=origen)
+            if fecha_nacimiento_desde:
+                qs = qs.filter(animal__fecha_nacimiento__gte=fecha_nacimiento_desde)
+            if fecha_nacimiento_hasta:
+                qs = qs.filter(animal__fecha_nacimiento__lte=fecha_nacimiento_hasta)
+            qs = qs.order_by('-fecha_baja')[:limite]
+            for mb in qs:
+                a = mb.animal
+                items.append(AnimalExportItemType(
+                    nro_arete=a.nro_arete, nombre=a.nombre, sexo=a.sexo,
+                    raza_nombre=a.raza.nombre if a.raza else None,
+                    categoria_nombre=a.categoria.nombre if a.categoria else None,
+                    peso=a.peso, fecha_nacimiento=a.fecha_nacimiento,
+                    edad_meses=calcular_edad_meses(a.fecha_nacimiento),
+                    tipo_produccion=a.tipo_produccion, origen=a.origen, estado=a.estado,
+                    parcela_actual=None, fecha_ingreso=a.fecha_ingreso,
+                    padre_arete=a.padre.nro_arete if a.padre else None,
+                    madre_arete=a.madre.nro_arete if a.madre else None,
+                    observaciones=a.observaciones,
+                    fecha_baja=mb.fecha_baja, tipo_baja=mb.tipo, causa_baja=mb.causa,
+                    peso_estimado_baja=mb.peso_estimado_kg, descripcion_baja=mb.descripcion,
+                ))
+
+        else:
+            qs = Animal.objects.filter(finca_id=finca_id).select_related(
+                'raza', 'categoria', 'padre', 'madre'
+            ).prefetch_related('historial_parcelas__parcela')
+
+            if tipo_reporte == 'ACTIVOS':
+                qs = qs.filter(estado='ACTIVO')
+            elif estado and estado not in ('', 'TODOS'):
+                qs = qs.filter(estado=estado)
+
+            qs = _filtrar_animal_qs(qs)
+
+            if parcela_id:
+                qs = qs.filter(
+                    historial_parcelas__parcela_id=parcela_id,
+                    historial_parcelas__fecha_salida__isnull=True
+                ).distinct()
+
+            if orden == 'arete_az':
+                qs = qs.order_by('nro_arete')
+            elif orden == 'nombre_az':
+                qs = qs.order_by('nombre')
+            elif orden == 'mayor_peso':
+                qs = qs.order_by('-peso')
+            elif orden == 'menor_peso':
+                qs = qs.order_by('peso')
+            else:
+                qs = qs.order_by('-fecha_registro')
+
+            qs = qs[:limite]
+
+            for a in qs:
+                parcela_act = None
+                for hp in a.historial_parcelas.all():
+                    if hp.fecha_salida is None and hp.parcela:
+                        parcela_act = hp.parcela.nombre
+                        break
+                items.append(AnimalExportItemType(
+                    nro_arete=a.nro_arete, nombre=a.nombre, sexo=a.sexo,
+                    raza_nombre=a.raza.nombre if a.raza else None,
+                    categoria_nombre=a.categoria.nombre if a.categoria else None,
+                    peso=a.peso, fecha_nacimiento=a.fecha_nacimiento,
+                    edad_meses=calcular_edad_meses(a.fecha_nacimiento),
+                    tipo_produccion=a.tipo_produccion, origen=a.origen, estado=a.estado,
+                    parcela_actual=parcela_act, fecha_ingreso=a.fecha_ingreso,
+                    padre_arete=a.padre.nro_arete if a.padre else None,
+                    madre_arete=a.madre.nro_arete if a.madre else None,
+                    observaciones=a.observaciones,
+                ))
+
+        if not items:
+            return ExportarAnimalesResultType(
+                items=[], total=0,
+                mensaje="No existen datos para los filtros seleccionados."
+            )
+        return ExportarAnimalesResultType(
+            items=items, total=len(items),
+            mensaje=f"Se encontraron {len(items)} registros."
         )
 
 
