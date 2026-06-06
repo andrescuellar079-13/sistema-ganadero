@@ -198,3 +198,49 @@ class DetalleCompraAnimal(models.Model):
 
     def __str__(self):
         return f"Animal: {self.nro_arete} - {self.nombre or ''}"
+class MovimientoInventario(models.Model):
+    TIPO_CHOICES = [
+        ("ENTRADA_COMPRA", "Entrada por Compra"),
+        ("SALIDA_USO", "Salida por Uso"),
+        ("SALIDA_VENTA", "Salida por Venta"),
+        ("AJUSTE_POSITIVO", "Ajuste Positivo"),
+        ("AJUSTE_NEGATIVO", "Ajuste Negativo"),
+        ("BAJA_VENCIMIENTO", "Baja por Vencimiento"),
+        ("BAJA_PERDIDA", "Baja por Pérdida"),
+    ]
+    TIPO_PRODUCTO_CHOICES = [
+        ("MEDICAMENTO", "Medicamento"),
+        ("ALIMENTO", "Alimento"),
+        ("VACUNA", "Vacuna"),
+    ]
+
+    finca = models.ForeignKey(Finca, on_delete=models.CASCADE, related_name="movimientos_inventario")
+    tipo_movimiento = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    tipo_producto = models.CharField(max_length=20, choices=TIPO_PRODUCTO_CHOICES)
+    medicamento = models.ForeignKey('catalogos.Medicamento', on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos")
+    alimento = models.ForeignKey('catalogos.Alimento', on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos")
+    vacuna = models.ForeignKey('catalogos.Vacuna', on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos")
+    nota_compra = models.ForeignKey(NotaCompra, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos_inventario")
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2)
+    stock_anterior = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    stock_posterior = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    fecha = models.DateField()
+    motivo = models.TextField(blank=True, null=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos_inventario")
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha", "-fecha_registro"]
+        verbose_name = "Movimiento de Inventario"
+        verbose_name_plural = "Movimientos de Inventario"
+
+    def __str__(self):
+        return f"{self.get_tipo_movimiento_display()} - {self.tipo_producto} - {self.cantidad} ({self.fecha})"
+
+    @property
+    def nombre_producto(self):
+        if self.medicamento: return self.medicamento.nombre
+        if self.alimento: return self.alimento.nombre
+        if self.vacuna: return self.vacuna.nombre
+        return "—"

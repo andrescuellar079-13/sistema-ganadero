@@ -28,6 +28,7 @@ import RrhhPage from './pages/RrhhPage'
 import UsuariosPage from './pages/UsuariosPage'
 import RolesPage from './pages/RolesPage'
 import FincaPage from './pages/FincaPage'
+import InventarioPage from './pages/InventarioPage'
 
 // ---------------------------------------------------------------------------
 // Layout para rutas protegidas
@@ -52,6 +53,7 @@ function AppLayout() {
         <Route path="/clientes"     element={<ProtectedRoute requiredPermission="ventas_ver"><ClientesPage /></ProtectedRoute>} />
         <Route path="/proveedores"  element={<ProtectedRoute requiredPermission="compras_ver"><ProveedoresPage /></ProtectedRoute>} />
         <Route path="/compras"      element={<ProtectedRoute requiredPermission="compras_ver"><ComprasPage /></ProtectedRoute>} />
+        <Route path="/inventario" element={<ProtectedRoute requiredPermission="compras_ver"><InventarioPage /></ProtectedRoute>} />
         <Route path="/ventas"       element={<ProtectedRoute requiredPermission="ventas_ver"><VentasPage /></ProtectedRoute>} />
         <Route path="/bajas"        element={<ProtectedRoute requiredPermission="animales_ver"><MuerteBajaPage /></ProtectedRoute>} />
         <Route path="/usuarios"     element={<ProtectedRoute requiredPermission="usuarios_ver"><UsuariosPage /></ProtectedRoute>} />

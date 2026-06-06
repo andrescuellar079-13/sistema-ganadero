@@ -27,6 +27,7 @@ import HomeWorkOutlinedIcon        from '@mui/icons-material/HomeWorkOutlined'
 import ChevronLeftIcon             from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon            from '@mui/icons-material/ChevronRight'
 import AgricultureIcon             from '@mui/icons-material/Agriculture'
+import InventoryOutlinedIcon from '@mui/icons-material/InventoryOutlined'
 
 const ICON_MAP = {
   dashboard:    DashboardOutlinedIcon,
@@ -38,6 +39,7 @@ const ICON_MAP = {
   sanidad:      HealthAndSafetyOutlinedIcon,
   bajas:        RemoveCircleOutlinedIcon,
   compras:      ShoppingCartOutlinedIcon,
+  inventario:   InventoryOutlinedIcon,
   ventas:       PointOfSaleOutlinedIcon,
   clientes:     PeopleOutlinedIcon,
   proveedores:  LocalShippingOutlinedIcon,
@@ -72,6 +74,7 @@ const MENU_GROUPS = [
     label: 'Comercio',
     items: [
       { path: '/compras',     name: 'Compras',    icon: 'compras',     permiso: 'compras_ver' },
+      { path: '/inventario', name: 'Inventario', icon: 'inventario', permiso: 'compras_ver' },
       { path: '/ventas',      name: 'Ventas',     icon: 'ventas',      permiso: 'ventas_ver' },
       { path: '/clientes',    name: 'Clientes',   icon: 'clientes',    permiso: 'ventas_ver' },
       { path: '/proveedores', name: 'Proveedores',icon: 'proveedores', permiso: 'compras_ver' },

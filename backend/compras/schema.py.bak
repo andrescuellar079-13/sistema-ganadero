@@ -10,7 +10,6 @@ from .models import (
     DetalleCompra,
     DetalleCompraAlimento,
     DetalleCompraAnimal,
-    MovimientoInventario,
 )
 
 
@@ -54,17 +53,6 @@ class DetalleCompraAnimalType(DjangoObjectType):
         fields = "__all__"
 
 
-class MovimientoInventarioType(DjangoObjectType):
-    nombre_producto = graphene.String()
-
-    class Meta:
-        model = MovimientoInventario
-        fields = "__all__"
-
-    def resolve_nombre_producto(self, info):
-        return self.nombre_producto
-
-
 # ==========================================
 # QUERY
 # ==========================================
@@ -80,15 +68,6 @@ class Query(graphene.ObjectType):
         NotaCompraType,
         anio=graphene.Int(required=True)
     )
-
-    movimientos_inventario = graphene.List(
-        MovimientoInventarioType,
-        finca_id=graphene.ID(),
-        tipo_producto=graphene.String(),
-        tipo_movimiento=graphene.String(),
-    )
-    productos_por_vencer = graphene.JSONString(finca_id=graphene.ID(), dias=graphene.Int())
-    productos_stock_bajo = graphene.JSONString(finca_id=graphene.ID())
 
     def resolve_proveedores(self, info):
         return Proveedor.objects.all()
@@ -108,92 +87,9 @@ class Query(graphene.ObjectType):
     def resolve_compras_por_anio(self, info, anio):
         return NotaCompra.objects.filter(fecha_compra__year=anio)
 
-    def resolve_movimientos_inventario(self, info, finca_id=None, tipo_producto=None, tipo_movimiento=None):
-        qs = MovimientoInventario.objects.all()
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
-        if tipo_producto:
-            qs = qs.filter(tipo_producto=tipo_producto)
-        if tipo_movimiento:
-            qs = qs.filter(tipo_movimiento=tipo_movimiento)
-        return qs
-
-    def resolve_productos_por_vencer(self, info, finca_id=None, dias=30):
-        from catalogos.models import Medicamento, Alimento, Vacuna
-        from django.utils import timezone
-        import datetime
-        import json
-        hoy = timezone.now().date()
-        limite = hoy + datetime.timedelta(days=dias)
-        resultado = []
-        for m in Medicamento.objects.filter(finca_id=finca_id, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
-            resultado.append({
-                "tipo": "MEDICAMENTO",
-                "id": m.id,
-                "nombre": m.nombre,
-                "fecha_vencimiento": str(m.fecha_vencimiento),
-                "stock": float(m.stock_cantidad),
-                "unidad": m.unidad_medida or "",
-            })
-        for a in Alimento.objects.filter(finca_id=finca_id, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
-            resultado.append({
-                "tipo": "ALIMENTO",
-                "id": a.id,
-                "nombre": a.nombre,
-                "fecha_vencimiento": str(a.fecha_vencimiento),
-                "stock": float(a.stock_cantidad),
-                "unidad": a.unidad_medida or "",
-            })
-        for v in Vacuna.objects.filter(finca_id=finca_id, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
-            resultado.append({
-                "tipo": "VACUNA",
-                "id": v.id,
-                "nombre": v.nombre,
-                "fecha_vencimiento": str(v.fecha_vencimiento),
-                "stock": float(v.stock_cantidad),
-                "unidad": "dosis",
-            })
-        return json.dumps(resultado)
-
-    def resolve_productos_stock_bajo(self, info, finca_id=None):
-        from catalogos.models import Medicamento, Alimento, Vacuna
-        import json
-        resultado = []
-        for m in Medicamento.objects.filter(finca_id=finca_id, activo=True):
-            if m.is_stock_bajo():
-                resultado.append({
-                    "tipo": "MEDICAMENTO",
-                    "id": m.id,
-                    "nombre": m.nombre,
-                    "stock": float(m.stock_cantidad),
-                    "stock_minimo": float(m.stock_minimo),
-                    "unidad": m.unidad_medida or "",
-                })
-        for a in Alimento.objects.filter(finca_id=finca_id, activo=True):
-            if a.is_stock_bajo():
-                resultado.append({
-                    "tipo": "ALIMENTO",
-                    "id": a.id,
-                    "nombre": a.nombre,
-                    "stock": float(a.stock_cantidad),
-                    "stock_minimo": float(a.stock_minimo),
-                    "unidad": a.unidad_medida or "",
-                })
-        for v in Vacuna.objects.filter(finca_id=finca_id, activo=True):
-            if float(v.stock_minimo or 0) > 0 and float(v.stock_cantidad or 0) <= float(v.stock_minimo):
-                resultado.append({
-                    "tipo": "VACUNA",
-                    "id": v.id,
-                    "nombre": v.nombre,
-                    "stock": float(v.stock_cantidad),
-                    "stock_minimo": float(v.stock_minimo),
-                    "unidad": "dosis",
-                })
-        return json.dumps(resultado)
-
 
 # ==========================================
-# MUTATIONS - PROVEEDORES
+# MUTATIONS - PROVEEDORES (sin cambios)
 # ==========================================
 
 class CrearProveedor(graphene.Mutation):
@@ -284,7 +180,7 @@ class EliminarProveedor(graphene.Mutation):
 
 
 # ==========================================
-# MUTATIONS - NOTA COMPRA
+# MUTATIONS - NOTA COMPRA (ACTUALIZADO con tipo_compra)
 # ==========================================
 
 class CrearNotaCompra(graphene.Mutation):
@@ -315,53 +211,6 @@ class CrearNotaCompra(graphene.Mutation):
             return CrearNotaCompra(nota_compra=nota_compra, success=True, message="Nota de compra creada")
         except Exception as e:
             return CrearNotaCompra(nota_compra=None, success=False, message=str(e))
-
-
-class ActualizarNotaCompra(graphene.Mutation):
-    class Arguments:
-        id = graphene.ID(required=True)
-        proveedor_id = graphene.ID()
-        fecha_compra = graphene.Date()
-        observaciones = graphene.String()
-
-    nota_compra = graphene.Field(NotaCompraType)
-    success = graphene.Boolean()
-    message = graphene.String()
-
-    @login_required
-    def mutate(self, info, id, **kwargs):
-        try:
-            nota_compra = NotaCompra.objects.get(id=id)
-            if kwargs.get('proveedor_id'):
-                nota_compra.proveedor_id = kwargs['proveedor_id']
-            if kwargs.get('fecha_compra'):
-                nota_compra.fecha_compra = kwargs['fecha_compra']
-            if kwargs.get('observaciones') is not None:
-                nota_compra.observaciones = kwargs['observaciones']
-            nota_compra.save()
-            return ActualizarNotaCompra(nota_compra=nota_compra, success=True, message="Compra actualizada")
-        except Exception as e:
-            return ActualizarNotaCompra(nota_compra=None, success=False, message=str(e))
-
-
-class EliminarNotaCompra(graphene.Mutation):
-    class Arguments:
-        id = graphene.ID(required=True)
-
-    success = graphene.Boolean()
-    message = graphene.String()
-
-    @login_required
-    def mutate(self, info, id):
-        try:
-            nota_compra = NotaCompra.objects.get(id=id)
-            nota_compra.detalles_medicamentos.all().delete()
-            nota_compra.detalles_alimentos.all().delete()
-            nota_compra.detalles_animales.all().delete()
-            nota_compra.delete()
-            return EliminarNotaCompra(success=True, message="Compra eliminada")
-        except Exception as e:
-            return EliminarNotaCompra(success=False, message=str(e))
 
 
 # ==========================================
@@ -429,7 +278,7 @@ class CrearDetalleCompraAlimento(graphene.Mutation):
 
 
 # ==========================================
-# MUTATIONS - DETALLE COMPRA ANIMAL
+# NUEVAS MUTATIONS - DETALLE COMPRA ANIMAL
 # ==========================================
 
 class CrearDetalleCompraAnimal(graphene.Mutation):
@@ -457,6 +306,7 @@ class CrearDetalleCompraAnimal(graphene.Mutation):
             
             nota_compra = NotaCompra.objects.get(id=nota_compra_id)
             
+            # Crear el animal en la base de datos
             animal = Animal.objects.create(
                 finca=nota_compra.finca,
                 nro_arete=nro_arete,
@@ -504,6 +354,7 @@ class EliminarDetalleCompraAnimal(graphene.Mutation):
             detalle = DetalleCompraAnimal.objects.get(id=id)
             nota_compra = detalle.nota_compra
             
+            # Eliminar el animal asociado
             try:
                 animal = Animal.objects.get(nro_arete=detalle.nro_arete, finca=nota_compra.finca)
                 animal.delete()
@@ -518,84 +369,55 @@ class EliminarDetalleCompraAnimal(graphene.Mutation):
 
 
 # ==========================================
-# MUTATIONS - MOVIMIENTO INVENTARIO
+# MUTATIONS - ACTUALIZAR/ELIMINAR NOTA COMPRA
 # ==========================================
 
-class RegistrarMovimientoInventario(graphene.Mutation):
+class ActualizarNotaCompra(graphene.Mutation):
     class Arguments:
-        finca_id = graphene.ID(required=True)
-        tipo_movimiento = graphene.String(required=True)
-        tipo_producto = graphene.String(required=True)
-        cantidad = graphene.Decimal(required=True)
-        fecha = graphene.Date(required=True)
-        medicamento_id = graphene.ID()
-        alimento_id = graphene.ID()
-        vacuna_id = graphene.ID()
-        precio_unitario = graphene.Decimal()
-        motivo = graphene.String()
-        nota_compra_id = graphene.ID()
+        id = graphene.ID(required=True)
+        proveedor_id = graphene.ID()
+        fecha_compra = graphene.Date()
+        observaciones = graphene.String()
 
-    movimiento = graphene.Field(MovimientoInventarioType)
+    nota_compra = graphene.Field(NotaCompraType)
     success = graphene.Boolean()
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, finca_id, tipo_movimiento, tipo_producto, cantidad, fecha, **kwargs):
+    def mutate(self, info, id, **kwargs):
         try:
-            from fincas.models import Finca
-            from catalogos.models import Medicamento, Alimento, Vacuna
-            from decimal import Decimal
-
-            finca = Finca.objects.get(id=finca_id)
-            usuario = info.context.user
-
-            medicamento = Medicamento.objects.get(id=kwargs['medicamento_id']) if kwargs.get('medicamento_id') else None
-            alimento = Alimento.objects.get(id=kwargs['alimento_id']) if kwargs.get('alimento_id') else None
-            vacuna = Vacuna.objects.get(id=kwargs['vacuna_id']) if kwargs.get('vacuna_id') else None
-
-            if medicamento:
-                stock_anterior = medicamento.stock_cantidad
-            elif alimento:
-                stock_anterior = alimento.stock_cantidad
-            elif vacuna:
-                stock_anterior = vacuna.stock_cantidad
-            else:
-                stock_anterior = Decimal('0')
-
-            es_entrada = tipo_movimiento in ("ENTRADA_COMPRA", "AJUSTE_POSITIVO")
-            stock_posterior = stock_anterior + Decimal(str(cantidad)) if es_entrada else stock_anterior - Decimal(str(cantidad))
-
-            if medicamento:
-                medicamento.stock_cantidad = stock_posterior
-                medicamento.save(update_fields=["stock_cantidad"])
-            elif alimento:
-                alimento.stock_cantidad = stock_posterior
-                alimento.save(update_fields=["stock_cantidad"])
-            elif vacuna:
-                vacuna.stock_cantidad = stock_posterior
-                vacuna.save(update_fields=["stock_cantidad"])
-
-            nota_compra = NotaCompra.objects.filter(id=kwargs['nota_compra_id']).first() if kwargs.get('nota_compra_id') else None
-
-            movimiento = MovimientoInventario.objects.create(
-                finca=finca,
-                tipo_movimiento=tipo_movimiento,
-                tipo_producto=tipo_producto,
-                medicamento=medicamento,
-                alimento=alimento,
-                vacuna=vacuna,
-                nota_compra=nota_compra,
-                cantidad=cantidad,
-                stock_anterior=stock_anterior,
-                stock_posterior=stock_posterior,
-                precio_unitario=kwargs.get('precio_unitario', 0),
-                fecha=fecha,
-                motivo=kwargs.get('motivo'),
-                registrado_por=usuario,
-            )
-            return RegistrarMovimientoInventario(movimiento=movimiento, success=True, message="Movimiento registrado")
+            nota_compra = NotaCompra.objects.get(id=id)
+            if kwargs.get('proveedor_id'):
+                nota_compra.proveedor_id = kwargs['proveedor_id']
+            if kwargs.get('fecha_compra'):
+                nota_compra.fecha_compra = kwargs['fecha_compra']
+            if kwargs.get('observaciones') is not None:
+                nota_compra.observaciones = kwargs['observaciones']
+            nota_compra.save()
+            return ActualizarNotaCompra(nota_compra=nota_compra, success=True, message="Compra actualizada")
         except Exception as e:
-            return RegistrarMovimientoInventario(movimiento=None, success=False, message=str(e))
+            return ActualizarNotaCompra(nota_compra=None, success=False, message=str(e))
+
+
+class EliminarNotaCompra(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            nota_compra = NotaCompra.objects.get(id=id)
+            # Eliminar todos los detalles
+            nota_compra.detalles_medicamentos.all().delete()
+            nota_compra.detalles_alimentos.all().delete()
+            nota_compra.detalles_animales.all().delete()
+            nota_compra.delete()
+            return EliminarNotaCompra(success=True, message="Compra eliminada")
+        except Exception as e:
+            return EliminarNotaCompra(success=False, message=str(e))
 
 
 # ==========================================
@@ -619,9 +441,6 @@ class Mutation(graphene.ObjectType):
     # Detalle Compra Alimento
     crear_detalle_compra_alimento = CrearDetalleCompraAlimento.Field()
     
-    # Detalle Compra Animal
+    # Detalle Compra Animal (NUEVO)
     crear_detalle_compra_animal = CrearDetalleCompraAnimal.Field()
     eliminar_detalle_compra_animal = EliminarDetalleCompraAnimal.Field()
-
-    # Inventario
-    registrar_movimiento_inventario = RegistrarMovimientoInventario.Field()
