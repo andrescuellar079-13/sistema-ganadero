@@ -160,13 +160,14 @@ class AnimalParcela(models.Model):
 
 class MovimientoAnimal(models.Model):
     MOTIVO_CHOICES = [
-        ('ROTACION',     'Rotación de potrero'),
-        ('SANIDAD',      'Razones sanitarias'),
-        ('ALIMENTACION', 'Manejo de alimentación'),
-        ('SEPARACION',   'Separación por gestación/cría'),
-        ('VENTA',        'Preparación para venta'),
-        ('MANTENIMIENTO','Mantenimiento de parcela'),
-        ('OTRO',         'Otro'),
+        ('ROTACION',             'Rotación de potrero'),
+        ('SANIDAD',              'Razones sanitarias'),
+        ('ALIMENTACION',         'Manejo de alimentación'),
+        ('SEPARACION',           'Separación por gestación/cría'),
+        ('VENTA',                'Preparación para venta'),
+        ('MANTENIMIENTO',        'Mantenimiento de parcela'),
+        ('TRANSFERENCIA_FINCA',  'Transferencia entre fincas'),
+        ('OTRO',                 'Otro'),
     ]
 
     finca = models.ForeignKey(
@@ -176,6 +177,12 @@ class MovimientoAnimal(models.Model):
     animal = models.ForeignKey(
         Animal, on_delete=models.CASCADE,
         related_name='movimientos'
+    )
+    # Solo para movimientos de tipo TRANSFERENCIA_FINCA
+    finca_destino = models.ForeignKey(
+        Finca, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimientos_recibidos'
     )
     parcela_origen = models.ForeignKey(
         Parcela, on_delete=models.SET_NULL,

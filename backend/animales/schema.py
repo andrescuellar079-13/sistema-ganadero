@@ -47,6 +47,10 @@ def _get_muerte_baja_type():
     from comercio.schema import MuerteBajaType
     return MuerteBajaType
 
+def _get_detalle_transferencia_type():
+    from fincas.schema import DetalleTransferenciaType
+    return DetalleTransferenciaType
+
 
 # ==========================================
 # TYPES
@@ -93,6 +97,7 @@ class AnimalType(DjangoObjectType):
     bajas = graphene.List(lambda: _get_muerte_baja_type())
 
     movimientos = graphene.List(lambda: MovimientoAnimalType)
+    transferencias_animal = graphene.List(lambda: _get_detalle_transferencia_type())
 
     class Meta:
         model = Animal
@@ -153,8 +158,17 @@ class AnimalType(DjangoObjectType):
 
     def resolve_movimientos(self, info):
         return self.movimientos.all().select_related(
-            'parcela_origen', 'parcela_destino', 'registrado_por'
+            'parcela_origen', 'parcela_destino', 'registrado_por',
+            'finca', 'finca_destino',
         ).order_by('-fecha_movimiento', '-fecha_registro')[:100]
+
+    def resolve_transferencias_animal(self, info):
+        return self.transferencias_detalle.all().select_related(
+            'transferencia__finca_origen',
+            'transferencia__finca_destino',
+            'parcela_origen',
+            'parcela_destino',
+        ).order_by('-transferencia__fecha_transferencia')
 
 
 class ParcelaType(DjangoObjectType):
@@ -183,6 +197,7 @@ class AnimalParcelaType(DjangoObjectType):
 class MovimientoAnimalType(DjangoObjectType):
     registrado_por_nombre = graphene.String()
     motivo_display = graphene.String()
+    tipo = graphene.String()  # 'FINCA' | 'PARCELA'
 
     class Meta:
         model = MovimientoAnimal
@@ -196,6 +211,9 @@ class MovimientoAnimalType(DjangoObjectType):
 
     def resolve_motivo_display(self, info):
         return self.get_motivo_display() if self.motivo else None
+
+    def resolve_tipo(self, info):
+        return 'FINCA' if self.motivo == 'TRANSFERENCIA_FINCA' else 'PARCELA'
 
 
 class ConteoAnimalGrupoType(graphene.ObjectType):
@@ -564,6 +582,12 @@ class Query(graphene.ObjectType):
             'detalles_venta__nota_venta',
             'detalles_venta__nota_venta__cliente',
             'muertes_bajas',
+            'transferencias_detalle',
+            'transferencias_detalle__transferencia',
+            'transferencias_detalle__transferencia__finca_origen',
+            'transferencias_detalle__transferencia__finca_destino',
+            'transferencias_detalle__parcela_origen',
+            'transferencias_detalle__parcela_destino',
         ).get(id=id)
 
     def resolve_animales_machos_para_padre(self, info, finca_id, excluir_id=None):
