@@ -27,6 +27,19 @@ export const GET_ANIMALES = gql`
   }
 `
 
+// Query para usar en Sanidad (con fincaId)
+export const GET_ANIMALES_SANIDAD = gql`
+  query GetAnimalesSanidad($fincaId: ID!) {
+    animales(fincaId: $fincaId) {
+      id
+      nroArete
+      nombre
+      sexo
+      estado
+    }
+  }
+`
+
 export const GET_ANIMALES_PAGINADOS = gql`
   query GetAnimalesPaginados(
     $fincaId: ID

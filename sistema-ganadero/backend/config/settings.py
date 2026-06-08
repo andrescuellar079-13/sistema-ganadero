@@ -89,18 +89,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ---------------------------------------------------------------------------
 # Base de datos — PostgreSQL
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Base de datos — PostgreSQL
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Base de datos — PostgreSQL
+# ---------------------------------------------------------------------------
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'sistema ganadero'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', '123456'),
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-        'OPTIONS': {
-            'options': '-c client_encoding=utf8',
-            'connect_timeout': 5,
-        },
+        'NAME': 'sistema_ganadero',
+        'USER': 'postgres',
+        'PASSWORD': '123456',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
     }
 }
 
