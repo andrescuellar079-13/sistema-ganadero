@@ -1,208 +1,191 @@
+// frontend/src/pages/DashboardPage.jsx
+import React, { useState } from 'react'
 import { useDashboard } from '../hooks/useDashboard'
+import { useFincas } from '../hooks/useFincas' 
 import LoadingSpinner from '../components/LoadingSpinner'
-import ErrorMessage   from '../components/ErrorMessage'
-import ChartCard      from '../components/ChartCard'
-import BarChart       from '../components/BarChart'
-import PieChart       from '../components/PieChart'
-import LineChart      from '../components/LineChart'
+import ErrorMessage from '../components/ErrorMessage'
 
-import {
-  Box, Card, CardContent, Typography, Chip,
-  Table, TableHead, TableBody, TableRow, TableCell, Paper,
-} from '@mui/material'
-import PetsOutlinedIcon                from '@mui/icons-material/PetsOutlined'
-import CheckCircleOutlinedIcon         from '@mui/icons-material/CheckCircleOutlined'
-import MedicalServicesOutlinedIcon     from '@mui/icons-material/MedicalServicesOutlined'
-import VaccinesOutlinedIcon            from '@mui/icons-material/VaccinesOutlined'
-import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined'
+// Importamos componentes visuales de Recharts
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, CartesianGrid
+} from 'recharts'
 
-const ACCENT = {
-  blue:   '#1565C0',
-  green:  '#2E7D32',
-  purple: '#6A1B9A',
-  orange: '#E65100',
-}
+const DashboardPage = () => {
+  const { fincaActual } = useFincas()
+  const fincaId = fincaActual?.id || "1" 
 
-// ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, IconComp, accent }) {
-  return (
-    <Card elevation={0} sx={{ borderLeft: `4px solid ${accent}` }}>
-      <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mb: 0.75 }}>
-              {label}
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.1 }}>
-              {value ?? '—'}
-            </Typography>
-          </Box>
-          <Box sx={{
-            width: 46, height: 46, borderRadius: 2, flexShrink: 0,
-            bgcolor: accent + '14',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <IconComp sx={{ fontSize: 22, color: accent }} />
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  )
-}
+  // Estados para manejar el rango de fechas en la interfaz
+  const [tipoFiltro, setTipoFiltro] = useState('ANIO') // Opciones: 'ANIO', 'MES', 'PERSONALIZADO'
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [fechaFin, setFechaFin] = useState('')
 
-// ── Placeholder vacío ─────────────────────────────────────────────────────────
-function EmptyChart() {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-      <Typography variant="body2" color="text.disabled">Sin datos disponibles</Typography>
-    </Box>
-  )
-}
-
-// ── Page ─────────────────────────────────────────────────────────────────────
-export default function DashboardPage() {
-  const {
-    totalAnimales, totalVacunas, totalVacunaciones, animalesActivos,
-    proximasVacunaciones,
-    vacunacionesPorMes, animalesPorCategoria, animalesPorSexo,
-    vacunasPorTipo, ventasPorMes, produccionPorMes,
-    loading, error, refetchStats,
-  } = useDashboard()
+  // Pasamos los parámetros de filtrado directo al hook actualizado
+  const { loading, error, kpis, datosMensuales } = useDashboard(fincaId, {
+    tipoFiltro,
+    fechaInicio,
+    fechaFin
+  })
 
   if (loading) return <LoadingSpinner />
-  if (error && !totalAnimales && !totalVacunas)
-    return <ErrorMessage message={error.message} onRetry={refetchStats} />
+  if (error) return <ErrorMessage error={error} />
 
-  const kpis = [
-    { label: 'Total Animales',      value: totalAnimales,     IconComp: PetsOutlinedIcon,            accent: ACCENT.blue   },
-    { label: 'Animales Activos',    value: animalesActivos,   IconComp: CheckCircleOutlinedIcon,     accent: ACCENT.green  },
-    { label: 'Vacunas Registradas', value: totalVacunas,      IconComp: MedicalServicesOutlinedIcon, accent: ACCENT.purple },
-    { label: 'Vacunaciones',        value: totalVacunaciones, IconComp: VaccinesOutlinedIcon,        accent: ACCENT.orange },
-  ]
+  // Formateadores para las tarjetas superiores
+  const formatearDinero = (valor) => {
+    const numero = typeof valor === 'number' ? valor : 0;
+    return '$ ' + numero.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+  };
 
-  const has = (obj) => obj?.labels?.length > 0
+  const formatearLeche = (litros) => {
+    const numero = typeof litros === 'number' ? litros : 0;
+    return numero.toFixed(1).replace(/\d(?=(\d{3})+\.)/g, '$&,') + ' Lts';
+  };
+
+  // Formateador compacto para el eje vertical ($2M, $4M, etc.)
+  const formatearEjeMoneda = (value) => {
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(1).replace('.0', '')}M`;
+    } else if (value >= 1000) {
+      return `$${(value / 1000).toFixed(1).replace('.0', '')}K`;
+    }
+    return `$${value}`;
+  };
+
+  // Texto dinámico para las etiquetas según el filtro activo
+  const obtenerEtiquetaPeriodo = (textoBase) => {
+    if (tipoFiltro === 'ANIO') return `${textoBase} del Año`;
+    if (tipoFiltro === 'MES') return `${textoBase} del Mes`;
+    return `${textoBase} del Período`;
+  };
 
   return (
-    <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      
+      {/* Encabezado con Barra de Herramientas Temporal */}
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Dashboard Ganadero</h1>
+          <p className="text-sm text-gray-400 mt-1">Análisis operativo de la finca</p>
+        </div>
+        
+        {/* Controles del Filtro de Tiempo */}
+        <div className="flex flex-wrap items-center gap-3">
+          <select 
+            value={tipoFiltro}
+            onChange={(e) => setTipoFiltro(e.target.value)}
+            className="text-sm bg-gray-50 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ANIO">Resumen Anual</option>
+            <option value="MES">Mes Actual</option>
+            <option value="PERSONALIZADO">Rango Personalizado</option>
+          </select>
 
-      {/* KPIs */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
-        {kpis.map(k => <KpiCard key={k.label} {...k} />)}
-      </Box>
+          {/* Renderizado Condicional: Muestra calendarios solo si elige 'Rango Personalizado' */}
+          {tipoFiltro === 'PERSONALIZADO' && (
+            <div className="flex items-center gap-2 animate-fadeIn">
+              <input 
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+                className="text-sm bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-xs text-gray-400 font-bold">al</span>
+              <input 
+                type="date"
+                value={fechaFin}
+                onChange={(e) => setFechaFin(e.target.value)}
+                className="text-sm bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Grid de Bloques Numéricos (KPIs) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Animales</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{kpis.totalAnimales}</p>
+        </div>
 
-      {/* Gráficos fila 1 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.5 }}>
-        <ChartCard title="Vacunaciones por Mes">
-          {has(vacunacionesPorMes)
-            ? <BarChart labels={vacunacionesPorMes.labels} data={vacunacionesPorMes.values}
-                title="Cantidad" backgroundColor={ACCENT.orange} />
-            : <EmptyChart />}
-        </ChartCard>
-        <ChartCard title="Ventas por Mes">
-          {has(ventasPorMes)
-            ? <LineChart labels={ventasPorMes.labels} data={ventasPorMes.values}
-                title="Monto (Gs.)" color={ACCENT.green} />
-            : <EmptyChart />}
-        </ChartCard>
-      </Box>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-pink-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Vacas Totales</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{kpis.vacas}</p>
+        </div>
 
-      {/* Gráficos fila 2 */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}>
-        <ChartCard title="Animales por Categoría">
-          {has(animalesPorCategoria)
-            ? <PieChart labels={animalesPorCategoria.labels} data={animalesPorCategoria.values} />
-            : <EmptyChart />}
-        </ChartCard>
-        <ChartCard title="Animales por Sexo">
-          {has(animalesPorSexo)
-            ? <PieChart labels={animalesPorSexo.labels} data={animalesPorSexo.values}
-                colors={[ACCENT.blue, '#AD1457']} />
-            : <EmptyChart />}
-        </ChartCard>
-        <ChartCard title="Vacunas por Vía de Aplicación">
-          {has(vacunasPorTipo)
-            ? <PieChart labels={vacunasPorTipo.labels} data={vacunasPorTipo.values} />
-            : <EmptyChart />}
-        </ChartCard>
-      </Box>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Crías / Terneros</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{kpis.crias}</p>
+        </div>
 
-      {/* Producción */}
-      <ChartCard title="Producción de Leche por Mes">
-        {has(produccionPorMes)
-          ? <BarChart labels={produccionPorMes.labels} data={produccionPorMes.values}
-              title="Litros" backgroundColor={ACCENT.purple} />
-          : <EmptyChart />}
-      </ChartCard>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-purple-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Partos (Próx. 30 días)</p>
+          <p className="text-3xl font-bold text-purple-600 mt-2">{kpis.partosProximos}</p>
+        </div>
 
-      {/* Próximas vacunaciones */}
-      {proximasVacunaciones.length > 0 && (
-        <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
-          {/* Header */}
-          <Box sx={{
-            px: 2.5, py: 1.75,
-            borderBottom: '1px solid #E2E8F0',
-            display: 'flex', alignItems: 'center', gap: 1,
-          }}>
-            <NotificationsActiveOutlinedIcon sx={{ fontSize: 18, color: ACCENT.orange }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-              Próximas Vacunaciones — próximos 30 días
-            </Typography>
-            <Chip
-              label={proximasVacunaciones.length}
-              size="small"
-              sx={{
-                bgcolor: '#FEF3C7', color: '#92400E',
-                fontWeight: 600, fontSize: '0.7rem', height: 20,
-              }}
-            />
-          </Box>
+        {/* Tarjetas dinámicas basadas en el filtro seleccionado */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{obtenerEtiquetaPeriodo('Ventas')}</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-2">{formatearDinero(kpis.ventasMes)}</p>
+        </div>
 
-          {/* Tabla */}
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Animal</TableCell>
-                  <TableCell>Vacuna</TableCell>
-                  <TableCell>Fecha Próxima</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {proximasVacunaciones.map(v => (
-                  <TableRow key={v.id} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        {v.animal?.nroArete && (
-                          <Typography component="span" variant="caption" color="text.disabled">
-                            #{v.animal.nroArete}
-                          </Typography>
-                        )}
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {v.animal?.nombre}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">{v.vacuna?.nombre}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={new Date(v.fechaProxima).toLocaleDateString('es-PY')}
-                        size="small"
-                        sx={{
-                          bgcolor: '#FEF3C7', color: '#92400E',
-                          border: '1px solid #FDE68A',
-                          fontWeight: 500, fontSize: '0.72rem',
-                        }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Box>
-        </Paper>
-      )}
-    </Box>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-red-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{obtenerEtiquetaPeriodo('Gastos')}</p>
+          <p className="text-2xl font-bold text-red-600 mt-2">{formatearDinero(kpis.gastosMes)}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Producción Leche</p>
+          <p className="text-2xl font-bold text-amber-600 mt-2">{formatearLeche(kpis.produccionMes)}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-orange-500 hover:shadow-md transition-shadow">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Enfermos / Tratamiento</p>
+          <p className="text-3xl font-bold text-orange-600 mt-2">{kpis.enfermos}</p>
+        </div>
+      </div>
+
+      {/* SECCIÓN DE GRÁFICOS ESTADÍSTICOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        
+        {/* Gráfico 1: Balance Financiero */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <h3 className="text-md font-bold text-gray-700 uppercase tracking-wider mb-4">Balance Financiero Mensual</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={datosMensuales} margin={{ top: 10, right: 10, left: 15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} />
+                <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} tickFormatter={formatearEjeMoneda} />
+                <Tooltip formatter={(value) => ['$' + value.toLocaleString('es-ES'), '']} />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px', fontSize: '13px' }} />
+                <Bar dataKey="ventas" name="Ventas" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="gastos" name="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfico 2: Tendencia de Leche */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <h3 className="text-md font-bold text-gray-700 uppercase tracking-wider mb-4">Tendencia de Producción Lechera</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={datosMensuales} margin={{ top: 10, right: 20, left: 15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} />
+                <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} tickFormatter={(value) => `${value} L`} />
+                <Tooltip formatter={(value) => [value.toLocaleString('es-ES') + ' Lts', 'Leche']} />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px', fontSize: '13px' }} />
+                <Line type="monotone" dataKey="leche" name="Producción (Litros)" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+      </div>
+    </div>
   )
 }
+
+export default DashboardPage

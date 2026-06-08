@@ -1,10 +1,6 @@
 // frontend/src/graphql/ventas.js
 import { gql } from '@apollo/client'
 
-// ==========================================
-// QUERIES
-// ==========================================
-
 export const GET_NOTAS_VENTA = gql`
   query GetNotasVenta {
     notasVenta {
@@ -13,21 +9,18 @@ export const GET_NOTAS_VENTA = gql`
       guiaSalida
       observaciones
       montoTotal
-      cliente {
-        id
-        nombre
-        apellidos
-        ci
-      }
+      modalidadVenta
+      corral { id nombre }
+      cliente { id nombre apellidos ci }
       detalles {
         id
         pesoVentaKg
+        precioUnitario
         subTotal
-        animal {
-          id
-          nroArete
-          nombre
-        }
+        modalidad
+        costoEstimado
+        utilidad
+        animal { id nroArete nombre }
       }
     }
   }
@@ -35,279 +28,167 @@ export const GET_NOTAS_VENTA = gql`
 
 export const GET_CLIENTES = gql`
   query GetClientes {
-    clientes {
-      id
-      nombre
-      apellidos
-      ci
-      telefono
-    }
+    clientes { id nombre apellidos ci telefono }
   }
 `
 
 export const GET_ANIMALES_DISPONIBLES = gql`
   query GetAnimalesDisponibles {
-    animalesDisponibles {
-      id
-      nroArete
-      nombre
-      peso
-      estado
-      raza {
-        nombre
-      }
-    }
-  }
-`
-
-export const GET_DETALLES_VENTA = gql`
-  query GetDetallesVenta($notaVentaId: ID!) {
-    detallesVenta(notaVentaId: $notaVentaId) {
-      id
-      pesoVentaKg
-      subTotal
-      animal {
-        id
-        nroArete
-        nombre
-        peso
-      }
-    }
+    animalesDisponibles { id nroArete nombre peso estado raza { nombre } }
   }
 `
 
 export const GET_MUERTES_BAJAS = gql`
   query GetMuertesBajas {
     muertesBajas {
-      id
-      fechaBaja
-      causa
-      tipo
-      descripcion
-      pesoEstimadoKg
-      animal {
-        id
-        nroArete
-        nombre
-        peso
-        raza {
-          nombre
-        }
-      }
+      id fechaBaja causa tipo motivoDescarte descripcion pesoEstimadoKg
+      animal { id nroArete nombre peso raza { nombre } }
     }
   }
 `
 
-// ==========================================
-// MUTATIONS - CREAR
-// ==========================================
+export const GET_CORRALES_VENTA = gql`
+  query GetCorralesVenta {
+    corralesVenta {
+      id nombre descripcion fechaFormacion activo totalAnimales pesoTotal
+      animales { id pesoEntrada animal { id nroArete nombre peso } }
+    }
+  }
+`
+
+export const GET_UTILIDAD_POR_VENTA = gql`
+  query GetUtilidadPorVenta($notaVentaId: ID!) {
+    utilidadPorVenta(notaVentaId: $notaVentaId)
+  }
+`
 
 export const CREATE_NOTA_VENTA = gql`
   mutation CrearNotaVenta(
-    $fincaId: ID!
-    $clienteId: ID
-    $fechaVenta: Date!
-    $guiaSalida: String
-    $observaciones: String
+    $fincaId: ID! $clienteId: ID $corralId: ID $modalidadVenta: String
+    $fechaVenta: Date! $guiaSalida: String $observaciones: String
   ) {
     crearNotaVenta(
-      fincaId: $fincaId
-      clienteId: $clienteId
-      fechaVenta: $fechaVenta
-      guiaSalida: $guiaSalida
-      observaciones: $observaciones
+      fincaId: $fincaId clienteId: $clienteId corralId: $corralId
+      modalidadVenta: $modalidadVenta fechaVenta: $fechaVenta
+      guiaSalida: $guiaSalida observaciones: $observaciones
     ) {
-      notaVenta {
-        id
-        fechaVenta
-      }
-      success
-      message
+      notaVenta { id fechaVenta modalidadVenta }
+      success message
     }
   }
 `
-
-export const CREATE_DETALLE_VENTA = gql`
-  mutation CrearDetalleVenta(
-    $notaVentaId: ID!
-    $animalId: ID!
-    $pesoVentaKg: Decimal!
-    $precioKg: Decimal!
-  ) {
-    crearDetalleVenta(
-      notaVentaId: $notaVentaId
-      animalId: $animalId
-      pesoVentaKg: $pesoVentaKg
-      precioKg: $precioKg
-    ) {
-      detalleVenta {
-        id
-        subTotal
-      }
-      success
-      message
-    }
-  }
-`
-
-export const CREATE_MUERTE_BAJA = gql`
-  mutation CrearMuerteBaja(
-    $fincaId: ID!
-    $animalId: ID!
-    $fechaBaja: Date!
-    $tipo: String!
-    $causa: String!
-    $descripcion: String
-    $pesoEstimadoKg: Decimal
-  ) {
-    crearMuerteBaja(
-      fincaId: $fincaId
-      animalId: $animalId
-      fechaBaja: $fechaBaja
-      tipo: $tipo
-      causa: $causa
-      descripcion: $descripcion
-      pesoEstimadoKg: $pesoEstimadoKg
-    ) {
-      muerteBaja {
-        id
-        fechaBaja
-        tipo
-      }
-      success
-      message
-    }
-  }
-`
-
-// ==========================================
-// MUTATIONS - ACTUALIZAR Y ELIMINAR VENTAS
-// ==========================================
 
 export const UPDATE_NOTA_VENTA = gql`
   mutation ActualizarNotaVenta(
-    $id: ID!
-    $clienteId: ID
-    $fechaVenta: Date
-    $observaciones: String
+    $id: ID! $clienteId: ID $corralId: ID $modalidadVenta: String
+    $fechaVenta: Date $observaciones: String
   ) {
     actualizarNotaVenta(
-      id: $id
-      clienteId: $clienteId
-      fechaVenta: $fechaVenta
-      observaciones: $observaciones
+      id: $id clienteId: $clienteId corralId: $corralId
+      modalidadVenta: $modalidadVenta fechaVenta: $fechaVenta observaciones: $observaciones
     ) {
-      notaVenta {
-        id
-        fechaVenta
-        observaciones
-        montoTotal
-        cliente {
-          id
-          nombre
-          apellidos
-          ci
-        }
-        detalles {
-          id
-          pesoVentaKg
-          subTotal
-          animal {
-            id
-            nroArete
-            nombre
-          }
-        }
-      }
-      success
-      message
+      notaVenta { id fechaVenta montoTotal }
+      success message
     }
   }
 `
 
 export const DELETE_NOTA_VENTA = gql`
   mutation EliminarNotaVenta($id: ID!) {
-    eliminarNotaVenta(id: $id) {
-      success
-      message
-    }
+    eliminarNotaVenta(id: $id) { success message }
   }
 `
 
-export const UPDATE_DETALLE_VENTA = gql`
-  mutation ActualizarDetalleVenta(
-    $id: ID!
-    $pesoVentaKg: Decimal
-    $precioKg: Decimal
+export const CREATE_DETALLE_VENTA = gql`
+  mutation CrearDetalleVenta(
+    $notaVentaId: ID! $animalId: ID! $modalidad: String
+    $precioKg: Decimal! $pesoVentaKg: Decimal $costoEstimado: Decimal
   ) {
-    actualizarDetalleVenta(
-      id: $id
-      pesoVentaKg: $pesoVentaKg
-      precioKg: $precioKg
+    crearDetalleVenta(
+      notaVentaId: $notaVentaId animalId: $animalId modalidad: $modalidad
+      precioKg: $precioKg pesoVentaKg: $pesoVentaKg costoEstimado: $costoEstimado
     ) {
-      detalleVenta {
-        id
-        pesoVentaKg
-        subTotal
-      }
-      success
-      message
+      detalleVenta { id subTotal utilidad }
+      success message
     }
   }
 `
 
 export const DELETE_DETALLE_VENTA = gql`
   mutation EliminarDetalleVenta($id: ID!) {
-    eliminarDetalleVenta(id: $id) {
-      success
-      message
+    eliminarDetalleVenta(id: $id) { success message }
+  }
+`
+
+export const CREATE_CORRAL_VENTA = gql`
+  mutation CrearCorralVenta(
+    $fincaId: ID! $nombre: String! $descripcion: String $fechaFormacion: Date!
+  ) {
+    crearCorralVenta(
+      fincaId: $fincaId nombre: $nombre descripcion: $descripcion fechaFormacion: $fechaFormacion
+    ) {
+      corral { id nombre }
+      success message
+    }
+  }
+`
+
+export const AGREGAR_ANIMAL_CORRAL = gql`
+  mutation AgregarAnimalCorral(
+    $corralId: ID! $animalId: ID! $pesoEntrada: Decimal $fechaIngreso: Date! $observaciones: String
+  ) {
+    agregarAnimalCorral(
+      corralId: $corralId animalId: $animalId pesoEntrada: $pesoEntrada
+      fechaIngreso: $fechaIngreso observaciones: $observaciones
+    ) {
+      animalCorral { id }
+      success message
+    }
+  }
+`
+
+export const DELETE_CORRAL_VENTA = gql`
+  mutation EliminarCorralVenta($id: ID!) {
+    eliminarCorralVenta(id: $id) { success message }
+  }
+`
+
+export const CREATE_MUERTE_BAJA = gql`
+  mutation CrearMuerteBaja(
+    $fincaId: ID! $animalId: ID! $fechaBaja: Date! $tipo: String!
+    $causa: String! $motivoDescarte: String $descripcion: String $pesoEstimadoKg: Decimal
+  ) {
+    crearMuerteBaja(
+      fincaId: $fincaId animalId: $animalId fechaBaja: $fechaBaja tipo: $tipo
+      causa: $causa motivoDescarte: $motivoDescarte descripcion: $descripcion pesoEstimadoKg: $pesoEstimadoKg
+    ) {
+      muerteBaja { id fechaBaja tipo motivoDescarte }
+      success message
     }
   }
 `
 
 export const UPDATE_MUERTE_BAJA = gql`
   mutation ActualizarMuerteBaja(
-    $id: ID!
-    $fechaBaja: Date
-    $tipo: String
-    $causa: String
-    $descripcion: String
-    $pesoEstimadoKg: Decimal
+    $id: ID! $fechaBaja: Date $tipo: String $causa: String
+    $motivoDescarte: String $descripcion: String $pesoEstimadoKg: Decimal
   ) {
     actualizarMuerteBaja(
-      id: $id
-      fechaBaja: $fechaBaja
-      tipo: $tipo
-      causa: $causa
-      descripcion: $descripcion
-      pesoEstimadoKg: $pesoEstimadoKg
+      id: $id fechaBaja: $fechaBaja tipo: $tipo causa: $causa
+      motivoDescarte: $motivoDescarte descripcion: $descripcion pesoEstimadoKg: $pesoEstimadoKg
     ) {
-      muerteBaja {
-        id
-        tipo
-        causa
-        fechaBaja
-        descripcion
-        pesoEstimadoKg
-      }
-      success
-      message
+      muerteBaja { id tipo causa motivoDescarte fechaBaja descripcion pesoEstimadoKg }
+      success message
     }
   }
 `
 
 export const DELETE_MUERTE_BAJA = gql`
   mutation EliminarMuerteBaja($id: ID!) {
-    eliminarMuerteBaja(id: $id) {
-      success
-      message
-    }
+    eliminarMuerteBaja(id: $id) { success message }
   }
 `
 
-// ==========================================
-// QUERIES PARA REPORTES
-// ==========================================
 
 export const GET_VENTAS_POR_RANGO = gql`
   query GetVentasPorRango($fechaInicio: Date!, $fechaFin: Date!) {
@@ -315,20 +196,8 @@ export const GET_VENTAS_POR_RANGO = gql`
       id
       fechaVenta
       montoTotal
-      cliente {
-        nombre
-        apellidos
-        ci
-      }
-      detalles {
-        id
-        pesoVentaKg
-        subTotal
-        animal {
-          nroArete
-          nombre
-        }
-      }
+      cliente { nombre apellidos ci }
+      detalles { id pesoVentaKg subTotal animal { nroArete nombre } }
     }
   }
 `

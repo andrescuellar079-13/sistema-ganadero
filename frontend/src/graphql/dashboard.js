@@ -95,3 +95,35 @@ export const GET_PRODUCCION_POR_MES = gql`
     }
   }
 `
+
+// NUEVA QUERY DASHBOARD COMPLETO CON LOS NUEVOS KPIS
+export const GET_DASHBOARD_COMPLETO = gql`
+  query GetDashboardCompleto($fincaId: ID!, $anio: Int!) {
+    allAnimales {
+      id
+      sexo
+      categoria {
+        id
+        nombre
+      }
+    }
+    proximosPartos(dias: 30, fincaId: $fincaId) {
+      id
+    }
+    ventasPorAnio(anio: $anio) {
+      id
+      montoTotal
+      fechaVenta
+    }
+    produccionesLeche(fincaId: $fincaId) {
+      id
+      litros
+      fecha
+    }
+    comprasPorAnio(anio: $anio) {
+      id
+      montoTotal
+      fechaCompra
+    }
+  }
+`

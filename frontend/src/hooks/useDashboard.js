@@ -1,179 +1,134 @@
 // frontend/src/hooks/useDashboard.js
 import { useQuery } from '@apollo/client'
-import {
-  GET_STATS,
-  GET_PROXIMAS_VACUNACIONES,
-  GET_VACUNACIONES_POR_MES,
-  GET_ANIMALES_POR_CATEGORIA,
-  GET_ANIMALES_POR_SEXO,
-  GET_VACUNAS_POR_TIPO,
-  GET_VENTAS_POR_MES,
-  GET_PRODUCCION_POR_MES,
-} from '../graphql/dashboard'
+import { GET_DASHBOARD_COMPLETO } from '../graphql/dashboard'
 
-export const useDashboard = () => {
-  const fincaId = localStorage.getItem('fincaId') || '1'
+export const useDashboard = (fincaId, filtroParams) => {
+  const anioActual = new Date().getFullYear();
+  const { tipoFiltro, fechaInicio, fechaFin } = filtroParams;
 
-  const { data: stats, loading: loadingStats, error: statsError, refetch: refetchStats } = useQuery(GET_STATS, {
-    variables: { fincaId }
-  })
+  // Seguimos pidiendo los datos del año completo al backend para armar los gráficos estables
+  const { data, loading, error } = useQuery(GET_DASHBOARD_COMPLETO, {
+    variables: { fincaId, anio: anioActual },
+    skip: !fincaId,
+  });
 
-  const { data: proximasVacunaciones, loading: loadingProximas } = useQuery(GET_PROXIMAS_VACUNACIONES, {
-    variables: { dias: 30 }
-  })
+  // Estructura base para los gráficos (Enero a Diciembre siempre fijos)
+  const nombresMeses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const datosMensuales = nombresMeses.map(mes => ({
+    name: mes,
+    ventas: 0,
+    gastos: 0,
+    leche: 0
+  }));
 
-  const { data: vacunacionesPorMes, loading: loadingVacunacionesMes } = useQuery(GET_VACUNACIONES_POR_MES, {
-    variables: { fincaId }
-  })
+  const kpis = {
+    totalAnimales: 0,
+    vacas: 0,
+    crias: 0,
+    enfermos: 0,
+    partosProximos: 0,
+    ventasMes: 0,      // Ahora representará el total del período seleccionado
+    gastosMes: 0,      // Ahora representará el total del período seleccionado
+    produccionMes: 0   // Ahora representará el total del período seleccionado
+  };
 
-  const { data: animalesPorCategoria, loading: loadingAnimalesCategoria } = useQuery(GET_ANIMALES_POR_CATEGORIA)
+  // Función interna para validar si una fecha entra en el filtro seleccionado
+  const cumpleFiltroFecha = (fechaStr) => {
+    if (!fechaStr) return false;
+    const fechaRegistro = new Date(fechaStr);
+    const hoy = new Date();
 
-  const { data: animalesPorSexo, loading: loadingAnimalesSexo } = useQuery(GET_ANIMALES_POR_SEXO)
-
-  const { data: vacunasPorTipo, loading: loadingVacunasTipo } = useQuery(GET_VACUNAS_POR_TIPO)
-
-  const { data: ventasPorMes, loading: loadingVentas } = useQuery(GET_VENTAS_POR_MES, {
-    variables: { fincaId }
-  })
-
-  const { data: produccionPorMes, loading: loadingProduccion } = useQuery(GET_PRODUCCION_POR_MES, {
-    variables: { fincaId }
-  })
-
-  // Estadísticas generales
-  const totalAnimales = stats?.totalAnimales?.length || 0
-  const totalVacunas = stats?.totalVacunas?.length || 0
-  const totalVacunaciones = stats?.totalVacunaciones?.length || 0
-  const animalesActivos = stats?.animalesActivos?.length || 0
-
-  // Vacunaciones por mes (últimos 6 meses)
-  const vacunacionesPorMesData = () => {
-    if (!vacunacionesPorMes?.vacunaciones) return { labels: [], values: [] }
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-    const counts = new Array(12).fill(0)
-    vacunacionesPorMes.vacunaciones.forEach(v => {
-      const mes = new Date(v.fechaAplicacion).getMonth()
-      if (mes >= 0) counts[mes]++
-    })
-    // Solo últimos 6 meses
-    const hoy = new Date()
-    const mesActual = hoy.getMonth()
-    const labels = []
-    const values = []
-    for (let i = 5; i >= 0; i--) {
-      let mes = mesActual - i
-      if (mes < 0) mes += 12
-      labels.push(meses[mes])
-      values.push(counts[mes])
+    if (tipoFiltro === 'MES') {
+      // Filtra si coincide con el mes actual y el año actual
+      return fechaRegistro.getMonth() === hoy.getMonth() && 
+             fechaRegistro.getFullYear() === hoy.getFullYear();
     }
-    return { labels, values }
-  }
 
-  // Animales por categoría
-  const animalesPorCategoriaData = () => {
-    if (!animalesPorCategoria?.allAnimales) return { labels: [], values: [] }
-    const categorias = {}
-    animalesPorCategoria.allAnimales.forEach(a => {
-      const nombre = a.categoria?.nombre || 'Sin categoría'
-      categorias[nombre] = (categorias[nombre] || 0) + 1
-    })
-    return {
-      labels: Object.keys(categorias),
-      values: Object.values(categorias)
+    if (tipoFiltro === 'PERSONALIZADO') {
+      // Filtra si está dentro del rango manual Desde / Hasta
+      if (!fechaInicio || !fechaFin) return true; // Si falta alguna fecha, muestra todo
+      const inicio = new Date(fechaInicio + 'T00:00:00');
+      const fin = new Date(fechaFin + 'T23:59:59');
+      return fechaRegistro >= inicio && fechaRegistro <= fin;
     }
+
+    // Por defecto 'ANIO': entra todo el año actual
+    return fechaRegistro.getFullYear() === anioActual;
+  };
+
+  if (data) {
+    // 1. Procesar Animales (estos son totales fijos de la finca en tiempo real)
+    kpis.totalAnimales = data.allAnimales?.length || 0;
+    data.allAnimales?.forEach(animal => {
+      const categoriaNom = animal.categoria?.nombre?.toUpperCase() || '';
+      if (animal.sexo === 'HEMBRA' && categoriaNom.includes('VACA')) {
+        kpis.vacas++;
+      }
+      if (categoriaNom.includes('CRIA') || categoriaNom.includes('TERNERO') || categoriaNom.includes('TERNERA')) {
+        kpis.crias++;
+      }
+    });
+
+    // 2. Partos Próximos
+    kpis.partosProximos = data.proximosPartos?.length || 0;
+
+    // 3. Procesar Ventas
+    data.ventasPorAnio?.forEach(v => {
+      const valor = parseFloat(v.montoTotal);
+      const monto = isNaN(valor) ? 0 : valor;
+
+      // Almacenar en el mes correspondiente para el gráfico (siempre anual)
+      if (v.fechaVenta) {
+        const mesIndex = new Date(v.fechaVenta).getMonth();
+        if (mesIndex >= 0 && mesIndex < 12) {
+          datosMensuales[mesIndex].ventas += monto;
+        }
+        
+        // Sumar al KPI acumulador de arriba SOLO si cumple el filtro temporal
+        if (cumpleFiltroFecha(v.fechaVenta)) {
+          kpis.ventasMes += monto;
+        }
+      }
+    });
+
+    // 4. Procesar Gastos/Compras
+    data.comprasPorAnio?.forEach(c => {
+      const valor = parseFloat(c.montoTotal);
+      const monto = isNaN(valor) ? 0 : valor;
+
+      // Almacenar en el mes correspondiente para el gráfico
+      if (c.fechaCompra) {
+        const mesIndex = new Date(c.fechaCompra).getMonth();
+        if (mesIndex >= 0 && mesIndex < 12) {
+          datosMensuales[mesIndex].gastos += monto;
+        }
+
+        // Sumar al KPI acumulador SOLO si cumple el filtro temporal
+        if (cumpleFiltroFecha(c.fechaCompra)) {
+          kpis.gastosMes += monto;
+        }
+      }
+    });
+
+    // 5. Procesar Leche
+    data.produccionesLeche?.forEach(p => {
+      const valor = parseFloat(p.litros);
+      const litros = isNaN(valor) ? 0 : valor;
+
+      // Almacenar en el mes correspondiente para el gráfico
+      if (p.fecha) {
+        const mesIndex = new Date(p.fecha).getMonth();
+        if (mesIndex >= 0 && mesIndex < 12) {
+          datosMensuales[mesIndex].leche += litros;
+        }
+
+        // Sumar al KPI acumulador SOLO si cumple el filtro temporal
+        if (cumpleFiltroFecha(p.fecha)) {
+          kpis.produccionMes += litros;
+        }
+      }
+    });
   }
 
-  // Animales por sexo
-  const animalesPorSexoData = () => {
-    if (!animalesPorSexo?.allAnimales) return { machos: 0, hembras: 0 }
-    let machos = 0, hembras = 0
-    animalesPorSexo.allAnimales.forEach(a => {
-      if (a.sexo === 'MACHO') machos++
-      else if (a.sexo === 'HEMBRA') hembras++
-    })
-    return { labels: ['Machos', 'Hembras'], values: [machos, hembras] }
-  }
-
-  // Vacunas por tipo (vía de aplicación)
-  const vacunasPorTipoData = () => {
-    if (!vacunasPorTipo?.allVacunas) return { labels: [], values: [] }
-    const tipos = {}
-    vacunasPorTipo.allVacunas.forEach(v => {
-      const via = v.viaAplicacion || 'No especificada'
-      tipos[via] = (tipos[via] || 0) + 1
-    })
-    return {
-      labels: Object.keys(tipos),
-      values: Object.values(tipos)
-    }
-  }
-
-  // Ventas por mes (últimos 6 meses)
-  const ventasPorMesData = () => {
-    if (!ventasPorMes?.ventasPorAnio) return { labels: [], values: [] }
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-    const totales = new Array(12).fill(0)
-    ventasPorMes.ventasPorAnio.forEach(v => {
-      const mes = new Date(v.fechaVenta).getMonth()
-      if (mes >= 0) totales[mes] += v.montoTotal || 0
-    })
-    const hoy = new Date()
-    const mesActual = hoy.getMonth()
-    const labels = []
-    const values = []
-    for (let i = 5; i >= 0; i--) {
-      let mes = mesActual - i
-      if (mes < 0) mes += 12
-      labels.push(meses[mes])
-      values.push(totales[mes])
-    }
-    return { labels, values }
-  }
-
-  // Producción por mes (últimos 6 meses)
-  const produccionPorMesData = () => {
-    if (!produccionPorMes?.produccionesLeche) return { labels: [], values: [] }
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-    const totales = new Array(12).fill(0)
-    produccionPorMes.produccionesLeche.forEach(p => {
-      const mes = new Date(p.fecha).getMonth()
-      if (mes >= 0) totales[mes] += p.litros || 0
-    })
-    const hoy = new Date()
-    const mesActual = hoy.getMonth()
-    const labels = []
-    const values = []
-    for (let i = 5; i >= 0; i--) {
-      let mes = mesActual - i
-      if (mes < 0) mes += 12
-      labels.push(meses[mes])
-      values.push(totales[mes])
-    }
-    return { labels, values }
-  }
-
-  return {
-    // Datos crudos
-    proximasVacunaciones: proximasVacunaciones?.vacunasProximas || [],
-    
-    // Estadísticas
-    totalAnimales,
-    totalVacunas,
-    totalVacunaciones,
-    animalesActivos,
-    
-    // Datos para gráficos
-    vacunacionesPorMes: vacunacionesPorMesData(),
-    animalesPorCategoria: animalesPorCategoriaData(),
-    animalesPorSexo: animalesPorSexoData(),
-    vacunasPorTipo: vacunasPorTipoData(),
-    ventasPorMes: ventasPorMesData(),
-    produccionPorMes: produccionPorMesData(),
-    
-    // Loading
-    loading: loadingStats || loadingProximas || loadingVacunacionesMes || loadingAnimalesCategoria || loadingAnimalesSexo || loadingVacunasTipo || loadingVentas || loadingProduccion,
-    
-    error: statsError,
-    refetchStats,
-  }
-}
+  return { loading, error, kpis, datosMensuales };
+};
