@@ -1,95 +1,141 @@
 // frontend/src/hooks/useReportesVentas.js
+import { useState } from 'react'
 import { useQuery } from '@apollo/client'
 import {
-  GET_VENTAS_POR_RANGO,
-  GET_RESUMEN_VENTAS_POR_PERIODO,
+  GET_ESTADISTICAS_VENTAS,
   GET_PRODUCTOS_MAS_VENDIDOS,
   GET_VENTAS_POR_CLIENTE,
-  GET_ESTADISTICAS_VENTAS,
+  GET_RESUMEN_VENTAS_POR_PERIODO,
+  GET_VENTAS_POR_RANGO,
 } from '../graphql/ventas'
 
 export const useReportesVentas = () => {
-  const getVentasPorRango = (fechaInicio, fechaFin) => {
-    const { data, loading, error, refetch } = useQuery(GET_VENTAS_POR_RANGO, {
-      variables: { fechaInicio, fechaFin },
-      skip: !fechaInicio || !fechaFin,
-    })
-    return {
-      ventas: data?.ventasPorRango || [],
-      loading,
-      error,
-      refetch,
+  // Los hooks van aquí en el nivel superior
+  const [filtros, setFiltros] = useState({
+    fechaInicio: null,
+    fechaFin: null,
+    periodo: 'mes',
+    limit: 10,
+  })
+
+  const { data: statsData, loading: loadingStats, refetch: refetchStats } = useQuery(
+    GET_ESTADISTICAS_VENTAS,
+    {
+      variables: {
+        fechaInicio: filtros.fechaInicio || undefined,
+        fechaFin: filtros.fechaFin || undefined,
+      },
     }
+  )
+
+  const { data: productosData, loading: loadingProductos, refetch: refetchProductos } = useQuery(
+    GET_PRODUCTOS_MAS_VENDIDOS,
+    {
+      variables: {
+        limit: filtros.limit,
+        fechaInicio: filtros.fechaInicio || undefined,
+        fechaFin: filtros.fechaFin || undefined,
+      },
+    }
+  )
+
+  const { data: clientesData, loading: loadingClientes, refetch: refetchClientes } = useQuery(
+    GET_VENTAS_POR_CLIENTE,
+    {
+      variables: {
+        limit: filtros.limit,
+        fechaInicio: filtros.fechaInicio || undefined,
+        fechaFin: filtros.fechaFin || undefined,
+      },
+    }
+  )
+
+  const { data: resumenData, loading: loadingResumen, refetch: refetchResumen } = useQuery(
+    GET_RESUMEN_VENTAS_POR_PERIODO,
+    {
+      variables: { periodo: filtros.periodo },
+    }
+  )
+
+  // Parsear JSON si viene como string
+  const parseJSON = (val) => {
+    if (!val) return null
+    if (typeof val === 'string') {
+      try { return JSON.parse(val) } catch { return null }
+    }
+    return val
   }
 
-  const getResumenPorPeriodo = (periodo) => {
-    const { data, loading, error, refetch } = useQuery(GET_RESUMEN_VENTAS_POR_PERIODO, {
-      variables: { periodo },
-    })
-    return {
-      resumen: data?.resumenVentasPorPeriodo || null,
-      loading,
-      error,
-      refetch,
-    }
+  const estadisticas = parseJSON(statsData?.estadisticasVentas)
+  const productos = parseJSON(productosData?.productosMasVendidos) || []
+  const clientes = parseJSON(clientesData?.ventasPorCliente) || []
+  const resumen = parseJSON(resumenData?.resumenVentasPorPeriodo)
+
+  const aplicarFiltros = (nuevasFechas) => {
+    setFiltros(prev => ({ ...prev, ...nuevasFechas }))
+    setTimeout(() => {
+      refetchStats()
+      refetchProductos()
+      refetchClientes()
+      refetchResumen()
+    }, 100)
   }
 
-  const getProductosMasVendidos = (limit = 10, fechaInicio = null, fechaFin = null) => {
-    const variables = { limit }
-    if (fechaInicio && fechaFin) {
-      variables.fechaInicio = fechaInicio
-      variables.fechaFin = fechaFin
-    }
-    const { data, loading, error, refetch } = useQuery(GET_PRODUCTOS_MAS_VENDIDOS, {
-      variables,
-    })
-    return {
-      productos: data?.productosMasVendidos || [],
-      loading,
-      error,
-      refetch,
-    }
+  const limpiarFiltros = () => {
+    setFiltros({ fechaInicio: null, fechaFin: null, periodo: 'mes', limit: 10 })
+    setTimeout(() => {
+      refetchStats()
+      refetchProductos()
+      refetchClientes()
+      refetchResumen()
+    }, 100)
   }
 
-  const getVentasPorCliente = (limit = 10, fechaInicio = null, fechaFin = null) => {
-    const variables = { limit }
-    if (fechaInicio && fechaFin) {
-      variables.fechaInicio = fechaInicio
-      variables.fechaFin = fechaFin
-    }
-    const { data, loading, error, refetch } = useQuery(GET_VENTAS_POR_CLIENTE, {
-      variables,
-    })
-    return {
-      clientes: data?.ventasPorCliente || [],
-      loading,
-      error,
-      refetch,
-    }
-  }
+  // Mantener compatibilidad con la API anterior del hook
+  // (ReportesVentas.jsx llama getEstadisticas(), getProductosMasVendidos(), getVentasPorCliente())
+  const getEstadisticas = () => ({
+    estadisticas,
+    loading: loadingStats,
+    refetch: refetchStats,
+  })
 
-  const getEstadisticas = (fechaInicio = null, fechaFin = null) => {
-    const variables = {}
-    if (fechaInicio && fechaFin) {
-      variables.fechaInicio = fechaInicio
-      variables.fechaFin = fechaFin
-    }
-    const { data, loading, error, refetch } = useQuery(GET_ESTADISTICAS_VENTAS, {
-      variables,
-    })
-    return {
-      estadisticas: data?.estadisticasVentas || null,
-      loading,
-      error,
-      refetch,
-    }
-  }
+  const getProductosMasVendidos = () => ({
+    productos,
+    loading: loadingProductos,
+    refetch: refetchProductos,
+  })
+
+  const getVentasPorCliente = () => ({
+    clientes,
+    loading: loadingClientes,
+    refetch: refetchClientes,
+  })
+
+  const getResumenPorPeriodo = () => ({
+    resumen,
+    loading: loadingResumen,
+    refetch: refetchResumen,
+  })
 
   return {
-    getVentasPorRango,
-    getResumenPorPeriodo,
+    // API de compatibilidad (usada por ReportesVentas.jsx)
+    getEstadisticas,
     getProductosMasVendidos,
     getVentasPorCliente,
-    getEstadisticas,
+    getResumenPorPeriodo,
+
+    // Datos directos
+    estadisticas,
+    productos,
+    clientes,
+    resumen,
+
+    // Estados
+    loading: loadingStats || loadingProductos || loadingClientes,
+    filtros,
+
+    // Acciones
+    aplicarFiltros,
+    limpiarFiltros,
   }
 }

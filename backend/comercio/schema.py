@@ -9,6 +9,8 @@ from .models import (
     NotaVenta,
     DetalleVenta,
     MuerteBaja,
+    CorrallVenta,
+    AnimalCorral,
 )
 
 
@@ -18,13 +20,34 @@ from .models import (
 
 class ClienteType(DjangoObjectType):
     id = graphene.ID()
-    
+
     class Meta:
         model = Cliente
         fields = "__all__"
-    
+
     def resolve_id(self, info):
         return self.id
+
+
+class CorrallVentaType(DjangoObjectType):
+    total_animales = graphene.Int()
+    peso_total = graphene.Float()
+
+    class Meta:
+        model = CorrallVenta
+        fields = "__all__"
+
+    def resolve_total_animales(self, info):
+        return self.total_animales
+
+    def resolve_peso_total(self, info):
+        return float(self.peso_total)
+
+
+class AnimalCorralType(DjangoObjectType):
+    class Meta:
+        model = AnimalCorral
+        fields = "__all__"
 
 
 class NotaVentaType(DjangoObjectType):
@@ -55,10 +78,10 @@ class Query(graphene.ObjectType):
     detalles_venta = graphene.List(DetalleVentaType)
     muertes_bajas = graphene.List(MuerteBajaType)
     animales_disponibles = graphene.List("animales.schema.AnimalType")
-    ventas_por_anio = graphene.List(
-        NotaVentaType,
-        anio=graphene.Int(required=True)
-    )
+    corrales_venta = graphene.List(CorrallVentaType)
+    animales_corral = graphene.List(AnimalCorralType, corral_id=graphene.ID())
+    ventas_por_anio = graphene.List(NotaVentaType, anio=graphene.Int(required=True))
+    utilidad_por_venta = graphene.JSONString(nota_venta_id=graphene.ID(required=True))
 
     def resolve_clientes(self, info):
         return Cliente.objects.all()
@@ -74,16 +97,51 @@ class Query(graphene.ObjectType):
 
     def resolve_animales_disponibles(self, info):
         from animales.models import Animal
-        return Animal.objects.filter(
-            estado='ACTIVO'
-        ).select_related('raza')
+        return Animal.objects.filter(estado='ACTIVO').select_related('raza')
+
+    def resolve_corrales_venta(self, info):
+        return CorrallVenta.objects.all()
+
+    def resolve_animales_corral(self, info, corral_id=None):
+        qs = AnimalCorral.objects.select_related('animal')
+        if corral_id:
+            qs = qs.filter(corral_id=corral_id)
+        return qs
 
     def resolve_ventas_por_anio(self, info, anio):
         return NotaVenta.objects.filter(fecha_venta__year=anio)
 
+    def resolve_utilidad_por_venta(self, info, nota_venta_id):
+        import json
+        try:
+            nota = NotaVenta.objects.get(id=nota_venta_id)
+            detalles = nota.detalles.select_related('animal').all()
+            resultado = {
+                "venta_id": nota_venta_id,
+                "monto_total": float(nota.monto_total),
+                "costo_total": float(sum(d.costo_estimado for d in detalles)),
+                "utilidad_total": float(sum(d.utilidad for d in detalles)),
+                "animales": [
+                    {
+                        "animal": d.animal.nro_arete,
+                        "nombre": d.animal.nombre or "—",
+                        "modalidad": d.modalidad,
+                        "precio_unitario": float(d.precio_unitario),
+                        "peso_kg": float(d.peso_venta_kg),
+                        "sub_total": float(d.sub_total),
+                        "costo": float(d.costo_estimado),
+                        "utilidad": float(d.utilidad),
+                    }
+                    for d in detalles
+                ]
+            }
+            return json.dumps(resultado)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
 
 # ==========================================
-# MUTATIONS - CREAR CLIENTE
+# MUTATIONS - CLIENTES
 # ==========================================
 
 class CrearCliente(graphene.Mutation):
@@ -101,27 +159,15 @@ class CrearCliente(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, finca_id, nombre, apellidos=None, telefono=None, direccion=None, ci=None, email=None):
+    def mutate(self, info, finca_id, nombre, **kwargs):
         try:
             from fincas.models import Finca
             finca = Finca.objects.get(id=finca_id)
-            cliente = Cliente.objects.create(
-                finca=finca,
-                nombre=nombre,
-                apellidos=apellidos,
-                telefono=telefono,
-                direccion=direccion,
-                ci=ci,
-                email=email
-            )
+            cliente = Cliente.objects.create(finca=finca, nombre=nombre, **kwargs)
             return CrearCliente(cliente=cliente, success=True, message=f"Cliente {nombre} creado exitosamente")
         except Exception as e:
             return CrearCliente(cliente=None, success=False, message=str(e))
 
-
-# ==========================================
-# MUTATIONS - ACTUALIZAR CLIENTE
-# ==========================================
 
 class ActualizarCliente(graphene.Mutation):
     class Arguments:
@@ -138,30 +184,17 @@ class ActualizarCliente(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, id, nombre=None, apellidos=None, telefono=None, direccion=None, ci=None, email=None):
+    def mutate(self, info, id, **kwargs):
         try:
             cliente = Cliente.objects.get(pk=id)
-            if nombre:
-                cliente.nombre = nombre
-            if apellidos:
-                cliente.apellidos = apellidos
-            if telefono:
-                cliente.telefono = telefono
-            if direccion:
-                cliente.direccion = direccion
-            if ci:
-                cliente.ci = ci
-            if email:
-                cliente.email = email
+            for k, v in kwargs.items():
+                if v is not None:
+                    setattr(cliente, k, v)
             cliente.save()
             return ActualizarCliente(cliente=cliente, success=True, message="Cliente actualizado exitosamente")
         except Exception as e:
             return ActualizarCliente(cliente=None, success=False, message=str(e))
 
-
-# ==========================================
-# MUTATIONS - ELIMINAR CLIENTE
-# ==========================================
 
 class EliminarCliente(graphene.Mutation):
     class Arguments:
@@ -176,9 +209,85 @@ class EliminarCliente(graphene.Mutation):
             cliente = Cliente.objects.get(pk=id)
             nombre = cliente.nombre
             cliente.delete()
-            return EliminarCliente(success=True, message=f"Cliente {nombre} eliminado exitosamente")
+            return EliminarCliente(success=True, message=f"Cliente {nombre} eliminado")
         except Exception as e:
             return EliminarCliente(success=False, message=str(e))
+
+
+# ==========================================
+# MUTATIONS - CORRAL DE VENTA
+# ==========================================
+
+class CrearCorralVenta(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        nombre = graphene.String(required=True)
+        descripcion = graphene.String()
+        fecha_formacion = graphene.Date(required=True)
+
+    corral = graphene.Field(CorrallVentaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, nombre, fecha_formacion, **kwargs):
+        try:
+            from fincas.models import Finca
+            finca = Finca.objects.get(id=finca_id)
+            corral = CorrallVenta.objects.create(
+                finca=finca, nombre=nombre, fecha_formacion=fecha_formacion,
+                descripcion=kwargs.get('descripcion')
+            )
+            return CrearCorralVenta(corral=corral, success=True, message=f"Corral '{nombre}' creado")
+        except Exception as e:
+            return CrearCorralVenta(corral=None, success=False, message=str(e))
+
+
+class AgregarAnimalCorral(graphene.Mutation):
+    class Arguments:
+        corral_id = graphene.ID(required=True)
+        animal_id = graphene.ID(required=True)
+        peso_entrada = graphene.Decimal()
+        fecha_ingreso = graphene.Date(required=True)
+        observaciones = graphene.String()
+
+    animal_corral = graphene.Field(AnimalCorralType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, corral_id, animal_id, fecha_ingreso, **kwargs):
+        try:
+            from animales.models import Animal
+            corral = CorrallVenta.objects.get(id=corral_id)
+            animal = Animal.objects.get(id=animal_id)
+            ac = AnimalCorral.objects.create(
+                corral=corral, animal=animal,
+                fecha_ingreso=fecha_ingreso,
+                peso_entrada=kwargs.get('peso_entrada', 0),
+                observaciones=kwargs.get('observaciones'),
+            )
+            return AgregarAnimalCorral(animal_corral=ac, success=True, message="Animal agregado al corral")
+        except Exception as e:
+            return AgregarAnimalCorral(animal_corral=None, success=False, message=str(e))
+
+
+class EliminarCorralVenta(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            corral = CorrallVenta.objects.get(id=id)
+            nombre = corral.nombre
+            corral.delete()
+            return EliminarCorralVenta(success=True, message=f"Corral '{nombre}' eliminado")
+        except Exception as e:
+            return EliminarCorralVenta(success=False, message=str(e))
 
 
 # ==========================================
@@ -189,6 +298,8 @@ class CrearNotaVenta(graphene.Mutation):
     class Arguments:
         finca_id = graphene.ID(required=True)
         cliente_id = graphene.ID()
+        corral_id = graphene.ID()
+        modalidad_venta = graphene.String()
         fecha_venta = graphene.Date(required=True)
         guia_salida = graphene.String()
         observaciones = graphene.String()
@@ -198,31 +309,33 @@ class CrearNotaVenta(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, finca_id, fecha_venta, cliente_id=None, guia_salida=None, observaciones=None):
+    def mutate(self, info, finca_id, fecha_venta, **kwargs):
         try:
             from fincas.models import Finca
             finca = Finca.objects.get(id=finca_id)
-            cliente = Cliente.objects.filter(id=cliente_id).first() if cliente_id else None
+            cliente = Cliente.objects.filter(id=kwargs.get('cliente_id')).first() if kwargs.get('cliente_id') else None
+            corral = CorrallVenta.objects.filter(id=kwargs.get('corral_id')).first() if kwargs.get('corral_id') else None
             nota_venta = NotaVenta.objects.create(
                 finca=finca,
                 cliente=cliente,
+                corral=corral,
+                modalidad_venta=kwargs.get('modalidad_venta', 'POR_KILO'),
                 fecha_venta=fecha_venta,
-                guia_salida=guia_salida,
-                observaciones=observaciones
+                guia_salida=kwargs.get('guia_salida'),
+                observaciones=kwargs.get('observaciones'),
+                registrado_por=info.context.user,
             )
             return CrearNotaVenta(nota_venta=nota_venta, success=True, message="Nota de venta creada exitosamente")
         except Exception as e:
             return CrearNotaVenta(nota_venta=None, success=False, message=str(e))
 
 
-# ==========================================
-# MUTATIONS - ACTUALIZAR NOTA VENTA (NUEVO)
-# ==========================================
-
 class ActualizarNotaVenta(graphene.Mutation):
     class Arguments:
         id = graphene.ID(required=True)
         cliente_id = graphene.ID()
+        corral_id = graphene.ID()
+        modalidad_venta = graphene.String()
         fecha_venta = graphene.Date()
         observaciones = graphene.String()
 
@@ -231,35 +344,24 @@ class ActualizarNotaVenta(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, id, cliente_id=None, fecha_venta=None, observaciones=None):
+    def mutate(self, info, id, **kwargs):
         try:
             nota_venta = NotaVenta.objects.get(pk=id)
-            
-            if cliente_id:
-                cliente = Cliente.objects.filter(id=cliente_id).first()
-                nota_venta.cliente = cliente
-            if fecha_venta:
-                nota_venta.fecha_venta = fecha_venta
-            if observaciones is not None:
-                nota_venta.observaciones = observaciones
-            
+            if kwargs.get('cliente_id'):
+                nota_venta.cliente = Cliente.objects.filter(id=kwargs['cliente_id']).first()
+            if kwargs.get('corral_id'):
+                nota_venta.corral = CorrallVenta.objects.filter(id=kwargs['corral_id']).first()
+            if kwargs.get('modalidad_venta'):
+                nota_venta.modalidad_venta = kwargs['modalidad_venta']
+            if kwargs.get('fecha_venta'):
+                nota_venta.fecha_venta = kwargs['fecha_venta']
+            if kwargs.get('observaciones') is not None:
+                nota_venta.observaciones = kwargs['observaciones']
             nota_venta.save()
-            return ActualizarNotaVenta(
-                nota_venta=nota_venta,
-                success=True,
-                message="Nota de venta actualizada exitosamente"
-            )
+            return ActualizarNotaVenta(nota_venta=nota_venta, success=True, message="Venta actualizada")
         except Exception as e:
-            return ActualizarNotaVenta(
-                nota_venta=None,
-                success=False,
-                message=str(e)
-            )
+            return ActualizarNotaVenta(nota_venta=None, success=False, message=str(e))
 
-
-# ==========================================
-# MUTATIONS - ELIMINAR NOTA VENTA (NUEVO)
-# ==========================================
 
 class EliminarNotaVenta(graphene.Mutation):
     class Arguments:
@@ -272,23 +374,49 @@ class EliminarNotaVenta(graphene.Mutation):
     def mutate(self, info, id):
         try:
             nota_venta = NotaVenta.objects.get(pk=id)
-            # Eliminar también los detalles
             nota_venta.detalles.all().delete()
             nota_venta.delete()
-            return EliminarNotaVenta(
-                success=True,
-                message="Nota de venta eliminada exitosamente"
-            )
+            return EliminarNotaVenta(success=True, message="Nota de venta eliminada")
         except Exception as e:
-            return EliminarNotaVenta(
-                success=False,
-                message=str(e)
+            return EliminarNotaVenta(success=False, message=str(e))
+
+
+# ==========================================
+# MUTATIONS - DETALLE VENTA
+# ==========================================
+
+class CrearDetalleVenta(graphene.Mutation):
+    class Arguments:
+        nota_venta_id = graphene.ID(required=True)
+        animal_id = graphene.ID(required=True)
+        modalidad = graphene.String()
+        precio_kg = graphene.Decimal(required=True)
+        peso_venta_kg = graphene.Decimal()
+        costo_estimado = graphene.Decimal()
+
+    detalle_venta = graphene.Field(DetalleVentaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, nota_venta_id, animal_id, precio_kg, **kwargs):
+        try:
+            from animales.models import Animal
+            nota_venta = NotaVenta.objects.get(id=nota_venta_id)
+            animal = Animal.objects.get(id=animal_id)
+            modalidad = kwargs.get('modalidad', nota_venta.modalidad_venta or 'POR_KILO')
+            detalle = DetalleVenta.objects.create(
+                nota_venta=nota_venta,
+                animal=animal,
+                modalidad=modalidad,
+                precio_unitario=precio_kg,
+                peso_venta_kg=kwargs.get('peso_venta_kg', 0),
+                costo_estimado=kwargs.get('costo_estimado', 0),
             )
+            return CrearDetalleVenta(detalle_venta=detalle, success=True, message="Detalle creado")
+        except Exception as e:
+            return CrearDetalleVenta(detalle_venta=None, success=False, message=str(e))
 
-
-# ==========================================
-# MUTATIONS - ELIMINAR DETALLE VENTA (NUEVO)
-# ==========================================
 
 class EliminarDetalleVenta(graphene.Mutation):
     class Arguments:
@@ -303,57 +431,16 @@ class EliminarDetalleVenta(graphene.Mutation):
             detalle = DetalleVenta.objects.get(pk=id)
             nota_venta = detalle.nota_venta
             detalle.delete()
-            
-            # Actualizar el monto total de la nota de venta
             nuevo_total = nota_venta.detalles.aggregate(total=Sum('sub_total'))['total'] or 0
             nota_venta.monto_total = nuevo_total
             nota_venta.save()
-            
-            return EliminarDetalleVenta(
-                success=True,
-                message="Detalle de venta eliminado exitosamente"
-            )
+            return EliminarDetalleVenta(success=True, message="Detalle eliminado")
         except Exception as e:
-            return EliminarDetalleVenta(
-                success=False,
-                message=str(e)
-            )
+            return EliminarDetalleVenta(success=False, message=str(e))
 
 
 # ==========================================
-# MUTATIONS - DETALLE VENTA
-# ==========================================
-
-class CrearDetalleVenta(graphene.Mutation):
-    class Arguments:
-        nota_venta_id = graphene.ID(required=True)
-        animal_id = graphene.ID(required=True)
-        precio_kg = graphene.Decimal(required=True)
-        peso_venta_kg = graphene.Decimal(required=True)
-
-    detalle_venta = graphene.Field(DetalleVentaType)
-    success = graphene.Boolean()
-    message = graphene.String()
-
-    @login_required
-    def mutate(self, info, nota_venta_id, animal_id, precio_kg, peso_venta_kg):
-        try:
-            from animales.models import Animal
-            nota_venta = NotaVenta.objects.get(id=nota_venta_id)
-            animal = Animal.objects.get(id=animal_id)
-            detalle = DetalleVenta.objects.create(
-                nota_venta=nota_venta,
-                animal=animal,
-                precio_unitario=precio_kg,
-                peso_venta_kg=peso_venta_kg
-            )
-            return CrearDetalleVenta(detalle_venta=detalle, success=True, message="Detalle de venta creado exitosamente")
-        except Exception as e:
-            return CrearDetalleVenta(detalle_venta=None, success=False, message=str(e))
-
-
-# ==========================================
-# MUTATIONS - CREAR MUERTE BAJA
+# MUTATIONS - MUERTE/BAJA
 # ==========================================
 
 class CrearMuerteBaja(graphene.Mutation):
@@ -363,6 +450,7 @@ class CrearMuerteBaja(graphene.Mutation):
         fecha_baja = graphene.Date(required=True)
         causa = graphene.String(required=True)
         tipo = graphene.String(required=True)
+        motivo_descarte = graphene.String()
         descripcion = graphene.String()
         peso_estimado_kg = graphene.Decimal()
 
@@ -371,7 +459,7 @@ class CrearMuerteBaja(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, finca_id, animal_id, fecha_baja, causa, tipo, descripcion=None, peso_estimado_kg=0):
+    def mutate(self, info, finca_id, animal_id, fecha_baja, causa, tipo, **kwargs):
         try:
             from fincas.models import Finca
             from animales.models import Animal
@@ -379,20 +467,12 @@ class CrearMuerteBaja(graphene.Mutation):
             finca = Finca.objects.get(id=finca_id)
             animal = Animal.objects.get(id=animal_id)
 
-            tipos_validos = ['MUERTE', 'ROBO', 'PERDIDA', 'DESCARTE', 'OTRO']
+            tipos_validos = ['MUERTE', 'ROBO', 'PERDIDA', 'DESCARTE', 'SACRIFICIO', 'OTRO']
             if tipo not in tipos_validos:
-                return CrearMuerteBaja(
-                    muerte_baja=None,
-                    success=False,
-                    message=f"Tipo inválido. Debe ser uno de: {', '.join(tipos_validos)}"
-                )
+                return CrearMuerteBaja(muerte_baja=None, success=False, message=f"Tipo inválido: {tipo}")
 
             if animal.estado == 'BAJA':
-                return CrearMuerteBaja(
-                    muerte_baja=None,
-                    success=False,
-                    message=f"El animal '{animal.nombre}' ya tiene una baja registrada"
-                )
+                return CrearMuerteBaja(muerte_baja=None, success=False, message=f"El animal ya tiene una baja registrada")
 
             muerte_baja = MuerteBaja.objects.create(
                 finca=finca,
@@ -400,25 +480,19 @@ class CrearMuerteBaja(graphene.Mutation):
                 fecha_baja=fecha_baja,
                 causa=causa,
                 tipo=tipo,
-                descripcion=descripcion,
-                peso_estimado_kg=peso_estimado_kg
+                motivo_descarte=kwargs.get('motivo_descarte'),
+                descripcion=kwargs.get('descripcion'),
+                peso_estimado_kg=kwargs.get('peso_estimado_kg', 0),
+                registrado_por=info.context.user,
             )
 
             animal.estado = 'BAJA'
             animal.save(update_fields=['estado'])
 
-            return CrearMuerteBaja(
-                muerte_baja=muerte_baja,
-                success=True,
-                message=f"Baja del animal '{animal.nombre}' registrada exitosamente"
-            )
+            return CrearMuerteBaja(muerte_baja=muerte_baja, success=True, message=f"Baja registrada exitosamente")
         except Exception as e:
             return CrearMuerteBaja(muerte_baja=None, success=False, message=str(e))
 
-
-# ==========================================
-# MUTATIONS - ACTUALIZAR MUERTE BAJA
-# ==========================================
 
 class ActualizarMuerteBaja(graphene.Mutation):
     class Arguments:
@@ -426,6 +500,7 @@ class ActualizarMuerteBaja(graphene.Mutation):
         fecha_baja = graphene.Date()
         tipo = graphene.String()
         causa = graphene.String()
+        motivo_descarte = graphene.String()
         descripcion = graphene.String()
         peso_estimado_kg = graphene.Decimal()
 
@@ -434,37 +509,29 @@ class ActualizarMuerteBaja(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(self, info, id, fecha_baja=None, tipo=None, causa=None, descripcion=None, peso_estimado_kg=None):
+    def mutate(self, info, id, **kwargs):
         try:
             muerte_baja = MuerteBaja.objects.get(pk=id)
-
-            if fecha_baja:
-                muerte_baja.fecha_baja = fecha_baja
-            if tipo:
-                tipos_validos = ['MUERTE', 'ROBO', 'PERDIDA', 'DESCARTE', 'OTRO']
-                if tipo not in tipos_validos:
+            if kwargs.get('fecha_baja'):
+                muerte_baja.fecha_baja = kwargs['fecha_baja']
+            if kwargs.get('tipo'):
+                tipos_validos = ['MUERTE', 'ROBO', 'PERDIDA', 'DESCARTE', 'SACRIFICIO', 'OTRO']
+                if kwargs['tipo'] not in tipos_validos:
                     return ActualizarMuerteBaja(muerte_baja=None, success=False, message="Tipo inválido")
-                muerte_baja.tipo = tipo
-            if causa:
-                muerte_baja.causa = causa
-            if descripcion is not None:
-                muerte_baja.descripcion = descripcion
-            if peso_estimado_kg is not None:
-                muerte_baja.peso_estimado_kg = peso_estimado_kg
-
+                muerte_baja.tipo = kwargs['tipo']
+            if kwargs.get('causa'):
+                muerte_baja.causa = kwargs['causa']
+            if kwargs.get('motivo_descarte') is not None:
+                muerte_baja.motivo_descarte = kwargs['motivo_descarte']
+            if kwargs.get('descripcion') is not None:
+                muerte_baja.descripcion = kwargs['descripcion']
+            if kwargs.get('peso_estimado_kg') is not None:
+                muerte_baja.peso_estimado_kg = kwargs['peso_estimado_kg']
             muerte_baja.save()
-            return ActualizarMuerteBaja(
-                muerte_baja=muerte_baja,
-                success=True,
-                message="Baja actualizada exitosamente"
-            )
+            return ActualizarMuerteBaja(muerte_baja=muerte_baja, success=True, message="Baja actualizada")
         except Exception as e:
             return ActualizarMuerteBaja(muerte_baja=None, success=False, message=str(e))
 
-
-# ==========================================
-# MUTATIONS - ELIMINAR MUERTE BAJA
-# ==========================================
 
 class EliminarMuerteBaja(graphene.Mutation):
     class Arguments:
@@ -476,20 +543,12 @@ class EliminarMuerteBaja(graphene.Mutation):
     @login_required
     def mutate(self, info, id):
         try:
-            from animales.models import Animal
-
             muerte_baja = MuerteBaja.objects.get(pk=id)
             animal = muerte_baja.animal
-
             muerte_baja.delete()
-
             animal.estado = 'ACTIVO'
             animal.save(update_fields=['estado'])
-
-            return EliminarMuerteBaja(
-                success=True,
-                message=f"Baja eliminada y animal '{animal.nombre}' reactivado exitosamente"
-            )
+            return EliminarMuerteBaja(success=True, message=f"Baja eliminada y animal reactivado")
         except Exception as e:
             return EliminarMuerteBaja(success=False, message=str(e))
 
@@ -503,16 +562,21 @@ class Mutation(graphene.ObjectType):
     crear_cliente = CrearCliente.Field()
     actualizar_cliente = ActualizarCliente.Field()
     eliminar_cliente = EliminarCliente.Field()
-    
+
+    # Corrales
+    crear_corral_venta = CrearCorralVenta.Field()
+    agregar_animal_corral = AgregarAnimalCorral.Field()
+    eliminar_corral_venta = EliminarCorralVenta.Field()
+
     # Notas de Venta
     crear_nota_venta = CrearNotaVenta.Field()
-    actualizar_nota_venta = ActualizarNotaVenta.Field()  # 👈 NUEVO
-    eliminar_nota_venta = EliminarNotaVenta.Field()      # 👈 NUEVO
-    
+    actualizar_nota_venta = ActualizarNotaVenta.Field()
+    eliminar_nota_venta = EliminarNotaVenta.Field()
+
     # Detalles de Venta
     crear_detalle_venta = CrearDetalleVenta.Field()
-    eliminar_detalle_venta = EliminarDetalleVenta.Field() # 👈 NUEVO
-    
+    eliminar_detalle_venta = EliminarDetalleVenta.Field()
+
     # Muertes/Bajas
     crear_muerte_baja = CrearMuerteBaja.Field()
     actualizar_muerte_baja = ActualizarMuerteBaja.Field()

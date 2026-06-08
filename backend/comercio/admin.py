@@ -77,3 +77,13 @@ class MuerteBajaAdmin(admin.ModelAdmin):
         "animal__nombre",
         "causa",
     )
+from .models import CorrallVenta, AnimalCorral
+
+@admin.register(CorrallVenta)
+class CorrallVentaAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'finca', 'fecha_formacion', 'activo', 'total_animales']
+    list_filter = ['activo', 'finca']
+
+@admin.register(AnimalCorral)
+class AnimalCorralAdmin(admin.ModelAdmin):
+    list_display = ['animal', 'corral', 'peso_entrada', 'fecha_ingreso']
