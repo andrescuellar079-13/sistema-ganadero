@@ -4,7 +4,9 @@ import {
   GET_VACUNACIONES,
   GET_VACUNAS,
   GET_ANIMALES_ACTIVOS,
+  GET_VETERINARIOS,
   GET_VACUNAS_PROXIMAS,
+  GET_VACUNAS_VENCIDAS,
   CREATE_VACUNACION,
   UPDATE_VACUNACION,
   DELETE_VACUNACION,
@@ -24,8 +26,14 @@ export const useVacunaciones = () => {
     variables: { fincaId }
   })
 
+  const { data: veterinarios, loading: loadingVeterinarios } = useQuery(GET_VETERINARIOS)
+
   const { data: vacunasProximas, loading: loadingProximas, refetch: refetchProximas } = useQuery(GET_VACUNAS_PROXIMAS, {
-    variables: { dias: 30 }
+    variables: { fincaId, dias: 30 }
+  })
+
+  const { data: vacunasVencidas, loading: loadingVencidas, refetch: refetchVencidas } = useQuery(GET_VACUNAS_VENCIDAS, {
+    variables: { fincaId }
   })
 
   // Mutations
@@ -33,16 +41,20 @@ export const useVacunaciones = () => {
   const [actualizarVacunacionMutation] = useMutation(UPDATE_VACUNACION)
   const [eliminarVacunacionMutation] = useMutation(DELETE_VACUNACION)
 
+  const refetchAll = async () => {
+    await Promise.all([refetchVacunaciones(), refetchProximas(), refetchVencidas()])
+  }
+
   const crearVacunacion = async (variables) => {
     try {
       const { data } = await crearVacunacionMutation({
         variables: { fincaId, ...variables }
       })
-      await refetchVacunaciones()
-      await refetchProximas()
-      return { success: true, data: data?.crearVacunacion }
+      const r = data?.crearVacunacion || {}
+      if (r.success) await refetchAll()
+      return r
     } catch (error) {
-      return { success: false, error: error.message }
+      return { success: false, message: error.message }
     }
   }
 
@@ -51,11 +63,11 @@ export const useVacunaciones = () => {
       const { data } = await actualizarVacunacionMutation({
         variables: { id, ...variables }
       })
-      await refetchVacunaciones()
-      await refetchProximas()
-      return { success: true, data: data?.actualizarVacunacion }
+      const r = data?.actualizarVacunacion || {}
+      if (r.success) await refetchAll()
+      return r
     } catch (error) {
-      return { success: false, error: error.message }
+      return { success: false, message: error.message }
     }
   }
 
@@ -64,11 +76,11 @@ export const useVacunaciones = () => {
       const { data } = await eliminarVacunacionMutation({
         variables: { id }
       })
-      await refetchVacunaciones()
-      await refetchProximas()
-      return { success: true, data: data?.eliminarVacunacion }
+      const r = data?.eliminarVacunacion || {}
+      if (r.success) await refetchAll()
+      return r
     } catch (error) {
-      return { success: false, error: error.message }
+      return { success: false, message: error.message }
     }
   }
 
@@ -77,20 +89,23 @@ export const useVacunaciones = () => {
     vacunaciones: vacunaciones?.vacunaciones || [],
     vacunas: vacunas?.allVacunas || [],
     animalesActivos: animalesActivos?.animalesActivos || [],
+    veterinarios: veterinarios?.veterinarios || [],
     vacunasProximas: vacunasProximas?.vacunasProximas || [],
-    
+    vacunasVencidas: vacunasVencidas?.vacunasVencidas || [],
+
     // Loading
-    loading: loadingVacunaciones || loadingVacunas || loadingAnimales || loadingProximas,
+    loading: loadingVacunaciones || loadingVacunas || loadingAnimales || loadingVeterinarios || loadingProximas || loadingVencidas,
     error,
-    
+
     // Functions
     crearVacunacion,
     actualizarVacunacion,
     eliminarVacunacion,
-    
+
     // Refetch
     refetchVacunaciones,
     refetchProximas,
+    refetchVencidas,
     refetchAnimales,
   }
 }

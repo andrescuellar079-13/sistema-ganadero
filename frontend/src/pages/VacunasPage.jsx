@@ -13,7 +13,7 @@ import EmptyState from '../components/ui/EmptyState'
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
   Typography, IconButton, Tooltip, TextField, InputAdornment,
-  MenuItem, Select, FormControl, InputLabel, Chip, Stack,
+  MenuItem, Select, FormControl, InputLabel, Chip, Stack, Button,
 } from '@mui/material'
 import MedicalServicesOutlinedIcon from '@mui/icons-material/MedicalServicesOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
@@ -21,6 +21,10 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import SearchIcon from '@mui/icons-material/Search'
 import ClearIcon from '@mui/icons-material/Clear'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined'
+
+import ReportModalReusable from '../components/ReportModalReusable'
+import { buildVacunasReportConfig } from '../components/reportes/vacunasReportConfig'
 
 export default function VacunasPage() {
   const { vacunas, loading, error, crearVacuna, actualizarVacuna, eliminarVacuna } = useVacunas()
@@ -28,7 +32,8 @@ export default function VacunasPage() {
   const [editing, setEditing] = useState(null)
   const [message, setMessage] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
-  
+  const [showReportes, setShowReportes] = useState(false)
+
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [viaFilter, setViaFilter] = useState('todos')
@@ -95,6 +100,8 @@ export default function VacunasPage() {
   const openEdit = (v) => { setEditing(v); setShowForm(true) }
   const closeForm = () => { setShowForm(false); setEditing(null) }
 
+  const reporteConfig = useMemo(() => buildVacunasReportConfig({ vacunas }), [vacunas])
+
   if (loading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={error.message} />
 
@@ -108,6 +115,17 @@ export default function VacunasPage() {
         icon={MedicalServicesOutlinedIcon}
         onAdd={openAdd}
         addLabel="Nueva Vacuna"
+        extra={
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<AssessmentOutlinedIcon />}
+            onClick={() => setShowReportes(true)}
+            sx={{ textTransform: 'none' }}
+          >
+            Reportes
+          </Button>
+        }
       />
 
       <PageAlert message={message} onClose={() => setMessage(null)} />
@@ -271,6 +289,12 @@ export default function VacunasPage() {
         onConfirm={handleDelete}
         title="¿Eliminar vacuna?"
         message="Esta acción no se puede deshacer."
+      />
+
+      <ReportModalReusable
+        open={showReportes}
+        onClose={() => setShowReportes(false)}
+        {...reporteConfig}
       />
     </Box>
   )

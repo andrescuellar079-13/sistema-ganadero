@@ -11,11 +11,13 @@ export const GET_VACUNACIONES = gql`
       id
       fechaAplicacion
       fechaProxima
+      estadoProxima
       campana
       lote
       dosisAplicada
       viaAplicacion
       observaciones
+      nombreVeterinario
       animal {
         id
         nroArete
@@ -25,6 +27,11 @@ export const GET_VACUNACIONES = gql`
         id
         nombre
         dosisRecomendada
+      }
+      veterinario {
+        id
+        nombre
+        apellidos
       }
     }
   }
@@ -38,17 +45,16 @@ export const GET_VACUNAS = gql`
       dosisRecomendada
       viaAplicacion
       intervaloDias
-    }
-  }
-`
-
-export const GET_ANIMALES = gql`
-  query GetAnimales {
-    allAnimales {
-      id
-      nroArete
-      nombre
-      sexo
+      edadMinimaMeses
+      diasAnticipacionAlerta
+      stockCantidad
+      stockMinimo
+      fechaVencimiento
+      activo
+      sexoAplicable
+      tipoProduccionAplicable
+      isStockBajo
+      isVencida
     }
   }
 `
@@ -60,17 +66,50 @@ export const GET_ANIMALES_ACTIVOS = gql`
       nroArete
       nombre
       sexo
+      fechaNacimiento
+      tipoProduccion
+    }
+  }
+`
+
+export const GET_VETERINARIOS = gql`
+  query GetVeterinarios {
+    veterinarios {
+      id
+      nombre
+      apellidos
+      activo
     }
   }
 `
 
 export const GET_VACUNAS_PROXIMAS = gql`
-  query GetVacunasProximas($dias: Int) {
-    vacunasProximas(dias: $dias) {
+  query GetVacunasProximas($fincaId: ID, $dias: Int) {
+    vacunasProximas(fincaId: $fincaId, dias: $dias) {
       id
       fechaAplicacion
       fechaProxima
+      estadoProxima
       campana
+      vacuna {
+        id
+        nombre
+      }
+      animal {
+        id
+        nroArete
+        nombre
+      }
+    }
+  }
+`
+
+export const GET_VACUNAS_VENCIDAS = gql`
+  query GetVacunasVencidas($fincaId: ID) {
+    vacunasVencidas(fincaId: $fincaId) {
+      id
+      fechaAplicacion
+      fechaProxima
       vacuna {
         id
         nombre
@@ -94,6 +133,7 @@ export const CREATE_VACUNACION = gql`
     $animalId: ID!
     $vacunaId: ID!
     $fechaAplicacion: Date!
+    $veterinarioId: ID
     $campana: String
     $lote: String
     $dosisAplicada: String
@@ -106,6 +146,7 @@ export const CREATE_VACUNACION = gql`
       animalId: $animalId
       vacunaId: $vacunaId
       fechaAplicacion: $fechaAplicacion
+      veterinarioId: $veterinarioId
       campana: $campana
       lote: $lote
       dosisAplicada: $dosisAplicada
@@ -120,6 +161,7 @@ export const CREATE_VACUNACION = gql`
       }
       success
       message
+      advertencia
     }
   }
 `
@@ -128,6 +170,7 @@ export const UPDATE_VACUNACION = gql`
   mutation ActualizarVacunacion(
     $id: ID!
     $fechaAplicacion: Date
+    $veterinarioId: ID
     $campana: String
     $lote: String
     $dosisAplicada: String
@@ -138,6 +181,7 @@ export const UPDATE_VACUNACION = gql`
     actualizarVacunacion(
       id: $id
       fechaAplicacion: $fechaAplicacion
+      veterinarioId: $veterinarioId
       campana: $campana
       lote: $lote
       dosisAplicada: $dosisAplicada

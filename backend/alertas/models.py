@@ -104,6 +104,7 @@ class Alerta(models.Model):
         ("PARTO_PROXIMO", "Parto próximo"),
         ("STOCK_BAJO_MEDICAMENTO", "Stock bajo de medicamento"),
         ("STOCK_BAJO_ALIMENTO", "Stock bajo de alimento"),
+        ("STOCK_BAJO_VACUNA", "Stock bajo de vacuna"),
         ("PESAJE_PENDIENTE", "Pesaje pendiente"),
         ("TRANSFERENCIA_PENDIENTE", "Transferencia pendiente"),
         ("OTRO", "Otro"),
