@@ -59,6 +59,8 @@ class ReproductorType(DjangoObjectType):
 class VacunaType(DjangoObjectType):
     id = graphene.ID()
     info = graphene.String()
+    is_stock_bajo = graphene.Boolean()
+    is_vencida = graphene.Boolean()
 
     class Meta:
         model = Vacuna
@@ -69,6 +71,12 @@ class VacunaType(DjangoObjectType):
 
     def resolve_info(self, info):
         return f"{self.nombre} - {self.dosis_recomendada}"
+
+    def resolve_is_stock_bajo(self, info):
+        return self.is_stock_bajo()
+
+    def resolve_is_vencida(self, info):
+        return self.is_vencida()
 
 
 class Query(graphene.ObjectType):
@@ -1126,14 +1134,20 @@ class CrearVacuna(graphene.Mutation):
         nombre = graphene.String(required=True)
         descripcion = graphene.String()
         enfermedad_previene = graphene.String()
+        laboratorio = graphene.String()
         dosis_recomendada = graphene.String(required=True)
         via_aplicacion = graphene.String(required=True)
         intervalo_dias = graphene.Int()
         edad_minima_meses = graphene.Int()
+        requiere_refuerzo = graphene.Boolean()
+        dias_anticipacion_alerta = graphene.Int()
+        sexo_aplicable = graphene.String()
+        tipo_produccion_aplicable = graphene.String()
         stock_cantidad = graphene.Decimal()
         stock_minimo = graphene.Decimal()
         lote = graphene.String()
         fecha_vencimiento = graphene.Date()
+        observaciones_tecnicas = graphene.String()
 
     vacuna = graphene.Field(VacunaType)
     success = graphene.Boolean()
@@ -1142,9 +1156,12 @@ class CrearVacuna(graphene.Mutation):
     @login_required
     def mutate(
         self, info, finca_id, nombre, dosis_recomendada, via_aplicacion,
-        descripcion=None, enfermedad_previene=None,
+        descripcion=None, enfermedad_previene=None, laboratorio=None,
         intervalo_dias=365, edad_minima_meses=0,
-        stock_cantidad=0, stock_minimo=0, lote=None, fecha_vencimiento=None
+        requiere_refuerzo=False, dias_anticipacion_alerta=30,
+        sexo_aplicable="AMBOS", tipo_produccion_aplicable="TODOS",
+        stock_cantidad=0, stock_minimo=0, lote=None, fecha_vencimiento=None,
+        observaciones_tecnicas=None
     ):
         try:
             from fincas.models import Finca
@@ -1153,24 +1170,37 @@ class CrearVacuna(graphene.Mutation):
                 return CrearVacuna(vacuna=None, success=False, message="El stock no puede ser negativo")
             if float(stock_minimo or 0) < 0:
                 return CrearVacuna(vacuna=None, success=False, message="El stock mínimo no puede ser negativo")
+            if (intervalo_dias or 0) < 0:
+                return CrearVacuna(vacuna=None, success=False, message="El intervalo no puede ser negativo")
             if (edad_minima_meses or 0) < 0:
                 return CrearVacuna(vacuna=None, success=False, message="La edad mínima no puede ser negativa")
+            if (dias_anticipacion_alerta or 0) < 0:
+                return CrearVacuna(vacuna=None, success=False, message="Los días de anticipación no pueden ser negativos")
 
             finca = Finca.objects.get(pk=finca_id)
 
+            if Vacuna.objects.filter(finca=finca, nombre__iexact=nombre.strip()).exists():
+                return CrearVacuna(vacuna=None, success=False, message=f"Ya existe una vacuna con el nombre '{nombre}' en esta finca")
+
             vacuna = Vacuna.objects.create(
                 finca=finca,
-                nombre=nombre,
+                nombre=nombre.strip(),
                 descripcion=descripcion,
                 enfermedad_previene=enfermedad_previene,
+                laboratorio=laboratorio,
                 dosis_recomendada=dosis_recomendada,
                 via_aplicacion=via_aplicacion,
-                intervalo_dias=intervalo_dias,
-                edad_minima_meses=edad_minima_meses,
+                intervalo_dias=intervalo_dias if intervalo_dias is not None else 365,
+                edad_minima_meses=edad_minima_meses or 0,
+                requiere_refuerzo=requiere_refuerzo if requiere_refuerzo is not None else False,
+                dias_anticipacion_alerta=dias_anticipacion_alerta if dias_anticipacion_alerta is not None else 30,
+                sexo_aplicable=sexo_aplicable or "AMBOS",
+                tipo_produccion_aplicable=tipo_produccion_aplicable or "TODOS",
                 stock_cantidad=stock_cantidad or 0,
                 stock_minimo=stock_minimo or 0,
                 lote=lote,
-                fecha_vencimiento=fecha_vencimiento
+                fecha_vencimiento=fecha_vencimiento,
+                observaciones_tecnicas=observaciones_tecnicas
             )
             return CrearVacuna(vacuna=vacuna, success=True, message=f"Vacuna '{nombre}' creada exitosamente")
         except Exception as e:
@@ -1183,14 +1213,20 @@ class ActualizarVacuna(graphene.Mutation):
         nombre = graphene.String()
         descripcion = graphene.String()
         enfermedad_previene = graphene.String()
+        laboratorio = graphene.String()
         dosis_recomendada = graphene.String()
         via_aplicacion = graphene.String()
         intervalo_dias = graphene.Int()
         edad_minima_meses = graphene.Int()
+        requiere_refuerzo = graphene.Boolean()
+        dias_anticipacion_alerta = graphene.Int()
+        sexo_aplicable = graphene.String()
+        tipo_produccion_aplicable = graphene.String()
         stock_cantidad = graphene.Decimal()
         stock_minimo = graphene.Decimal()
         lote = graphene.String()
         fecha_vencimiento = graphene.Date()
+        observaciones_tecnicas = graphene.String()
         activo = graphene.Boolean()
 
     vacuna = graphene.Field(VacunaType)
@@ -1200,11 +1236,13 @@ class ActualizarVacuna(graphene.Mutation):
     @login_required
     def mutate(
         self, info, id,
-        nombre=None, descripcion=None, enfermedad_previene=None,
+        nombre=None, descripcion=None, enfermedad_previene=None, laboratorio=None,
         dosis_recomendada=None, via_aplicacion=None,
         intervalo_dias=None, edad_minima_meses=None,
+        requiere_refuerzo=None, dias_anticipacion_alerta=None,
+        sexo_aplicable=None, tipo_produccion_aplicable=None,
         stock_cantidad=None, stock_minimo=None,
-        lote=None, fecha_vencimiento=None, activo=None
+        lote=None, fecha_vencimiento=None, observaciones_tecnicas=None, activo=None
     ):
         try:
             vacuna = Vacuna.objects.get(pk=id)
@@ -1213,15 +1251,26 @@ class ActualizarVacuna(graphene.Mutation):
                 return ActualizarVacuna(vacuna=None, success=False, message="El stock no puede ser negativo")
             if stock_minimo is not None and float(stock_minimo) < 0:
                 return ActualizarVacuna(vacuna=None, success=False, message="El stock mínimo no puede ser negativo")
+            if intervalo_dias is not None and intervalo_dias < 0:
+                return ActualizarVacuna(vacuna=None, success=False, message="El intervalo no puede ser negativo")
             if edad_minima_meses is not None and edad_minima_meses < 0:
                 return ActualizarVacuna(vacuna=None, success=False, message="La edad mínima no puede ser negativa")
+            if dias_anticipacion_alerta is not None and dias_anticipacion_alerta < 0:
+                return ActualizarVacuna(vacuna=None, success=False, message="Los días de anticipación no pueden ser negativos")
+
+            if nombre and Vacuna.objects.filter(
+                finca=vacuna.finca, nombre__iexact=nombre.strip()
+            ).exclude(pk=vacuna.pk).exists():
+                return ActualizarVacuna(vacuna=None, success=False, message=f"Ya existe una vacuna con el nombre '{nombre}' en esta finca")
 
             if nombre:
-                vacuna.nombre = nombre
+                vacuna.nombre = nombre.strip()
             if descripcion is not None:
                 vacuna.descripcion = descripcion
             if enfermedad_previene is not None:
                 vacuna.enfermedad_previene = enfermedad_previene
+            if laboratorio is not None:
+                vacuna.laboratorio = laboratorio
             if dosis_recomendada:
                 vacuna.dosis_recomendada = dosis_recomendada
             if via_aplicacion:
@@ -1230,6 +1279,14 @@ class ActualizarVacuna(graphene.Mutation):
                 vacuna.intervalo_dias = intervalo_dias
             if edad_minima_meses is not None:
                 vacuna.edad_minima_meses = edad_minima_meses
+            if requiere_refuerzo is not None:
+                vacuna.requiere_refuerzo = requiere_refuerzo
+            if dias_anticipacion_alerta is not None:
+                vacuna.dias_anticipacion_alerta = dias_anticipacion_alerta
+            if sexo_aplicable:
+                vacuna.sexo_aplicable = sexo_aplicable
+            if tipo_produccion_aplicable:
+                vacuna.tipo_produccion_aplicable = tipo_produccion_aplicable
             if stock_cantidad is not None:
                 vacuna.stock_cantidad = stock_cantidad
             if stock_minimo is not None:
@@ -1238,6 +1295,8 @@ class ActualizarVacuna(graphene.Mutation):
                 vacuna.lote = lote
             if fecha_vencimiento is not None:
                 vacuna.fecha_vencimiento = fecha_vencimiento
+            if observaciones_tecnicas is not None:
+                vacuna.observaciones_tecnicas = observaciones_tecnicas
             if activo is not None:
                 vacuna.activo = activo
             vacuna.save()
@@ -1257,7 +1316,7 @@ class EliminarVacuna(graphene.Mutation):
     def mutate(self, info, id):
         try:
             vacuna = Vacuna.objects.get(pk=id)
-            if vacuna.vacunacion_set.exists():
+            if vacuna.vacunaciones.exists():
                 return EliminarVacuna(success=False, message="No se puede eliminar: la vacuna está asociada a vacunaciones registradas. Inactívela en su lugar.")
             nombre = vacuna.nombre
             vacuna.delete()
