@@ -32,13 +32,8 @@
     "chart.js": "^4.5.1",
     "file-saver": "^2.0.5",
     "graphql": "^16.8.0",
-<<<<<<< HEAD
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
-=======
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.6.0",
->>>>>>> 90ecb594c91d04491eda4fe9e65226cd41839aa7
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.2.0",
