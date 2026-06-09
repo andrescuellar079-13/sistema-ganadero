@@ -71,6 +71,7 @@ export const GET_PRODUCCIONES_LECHE = gql`
       lactancia {
         id
         numeroLactancia
+        promedioDiario
       }
     }
   }
@@ -141,6 +142,48 @@ export const GET_ANIMALES_PRODUCCION = gql`
 export const GET_PRODUCCION_TOTAL_HOY = gql`
   query GetProduccionTotalHoy($fincaId: ID!) {
     produccionTotalHoy(fincaId: $fincaId)
+  }
+`
+
+// Resumen consolidado del módulo (KPIs de la pestaña "Resumen Productivo").
+// Fuente única en el backend para no duplicar cálculos.
+export const GET_RESUMEN_PRODUCCION = gql`
+  query GetResumenProduccion($fincaId: ID!) {
+    resumenProduccion(fincaId: $fincaId) {
+      produccionLecheHoy
+      promedioLitrosVaca
+      lactanciasActivas
+      animalesEngorde
+      gananciaDiariaPromedio
+      animalesSinPesaje
+      animalesListosVenta
+    }
+  }
+`
+
+// Engordes activos (carne / engorde) con datos derivados del último pesaje
+export const GET_ENGORDES_ACTIVOS = gql`
+  query GetEngordesActivos($fincaId: ID!) {
+    engordesActivos(fincaId: $fincaId) {
+      id
+      fechaInicio
+      pesoInicial
+      pesoObjetivo
+      tipoEngorde
+      loteGrupo
+      estado
+      observaciones
+      pesoActual
+      diasEnEngorde
+      gananciaDiaria
+      pesoFaltante
+      ultimoPesajeFecha
+      animal {
+        id
+        nroArete
+        nombre
+      }
+    }
   }
 `
 
@@ -277,6 +320,54 @@ export const CREATE_PRODUCCION_LECHE = gql`
         litros
         fecha
         turno
+      }
+      success
+      message
+    }
+  }
+`
+
+// ==========================================
+// MUTATIONS - ENGORDE / CARNE
+// ==========================================
+
+export const INICIAR_ENGORDE = gql`
+  mutation IniciarEngorde(
+    $fincaId: ID!
+    $animalId: ID!
+    $fechaInicio: Date!
+    $pesoInicial: Decimal!
+    $pesoObjetivo: Decimal!
+    $tipoEngorde: String
+    $loteGrupo: String
+    $observaciones: String
+  ) {
+    iniciarEngorde(
+      fincaId: $fincaId
+      animalId: $animalId
+      fechaInicio: $fechaInicio
+      pesoInicial: $pesoInicial
+      pesoObjetivo: $pesoObjetivo
+      tipoEngorde: $tipoEngorde
+      loteGrupo: $loteGrupo
+      observaciones: $observaciones
+    ) {
+      engorde {
+        id
+        estado
+      }
+      success
+      message
+    }
+  }
+`
+
+export const CAMBIAR_ESTADO_ENGORDE = gql`
+  mutation CambiarEstadoEngorde($id: ID!, $estado: String!) {
+    cambiarEstadoEngorde(id: $id, estado: $estado) {
+      engorde {
+        id
+        estado
       }
       success
       message

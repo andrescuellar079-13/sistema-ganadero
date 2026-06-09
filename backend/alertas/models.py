@@ -107,6 +107,12 @@ class Alerta(models.Model):
         ("STOCK_BAJO_VACUNA", "Stock bajo de vacuna"),
         ("PESAJE_PENDIENTE", "Pesaje pendiente"),
         ("TRANSFERENCIA_PENDIENTE", "Transferencia pendiente"),
+        # --- Producción (preparados; ANIMAL_LISTO_VENTA ya se genera) ---
+        ("ANIMAL_SIN_PESAJE", "Animal sin pesaje"),
+        ("PERDIDA_PESO", "Pérdida de peso"),
+        ("ANIMAL_LISTO_VENTA", "Animal listo para venta"),
+        ("BAJA_PRODUCCION_LECHE", "Baja producción de leche"),
+        ("VACA_A_SECAR", "Vaca a secar"),
         ("OTRO", "Otro"),
     ]
 

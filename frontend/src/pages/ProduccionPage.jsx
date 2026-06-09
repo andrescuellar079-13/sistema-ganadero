@@ -1,15 +1,18 @@
 // frontend/src/pages/ProduccionPage.jsx
 import { useState, useMemo } from 'react'
 import { useProduccion } from '../hooks/useProduccion'
-import LoadingSpinner      from '../components/LoadingSpinner'
-import LactanciaForm       from '../components/LactanciaForm'
-import ProduccionLecheForm from '../components/ProduccionLecheForm'
-import RegistroPesoForm    from '../components/RegistroPesoForm'
+import LoadingSpinner       from '../components/LoadingSpinner'
+import LactanciaForm        from '../components/LactanciaForm'
+import ProduccionLecheForm  from '../components/ProduccionLecheForm'
+import RegistroPesoForm     from '../components/RegistroPesoForm'
+import IniciarEngordeDialog from '../components/IniciarEngordeDialog'
+import ReportModalReusable  from '../components/ReportModalReusable'
+import { buildProduccionReportConfigs } from '../components/reportes/produccionReportConfig'
 
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
   Typography, Tabs, Tab, Chip, Card, CardContent, Grid,
-  TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel,
+  TextField, InputAdornment, MenuItem, Menu, Select, FormControl, InputLabel,
   Stack, IconButton, Tooltip, Button,
 } from '@mui/material'
 import LocalDrinkOutlinedIcon    from '@mui/icons-material/LocalDrinkOutlined'
@@ -22,6 +25,7 @@ import EmojiEventsOutlinedIcon   from '@mui/icons-material/EmojiEventsOutlined'
 import SearchIcon                from '@mui/icons-material/Search'
 import ClearIcon                 from '@mui/icons-material/Clear'
 import FilterListIcon            from '@mui/icons-material/FilterList'
+import AssessmentOutlinedIcon    from '@mui/icons-material/AssessmentOutlined'
 
 // Convierte cualquier valor a número seguro (evita NaN en los indicadores)
 const safeNum = (v) => {
@@ -40,14 +44,14 @@ const KPI = ({ label, value, sub, accent }) => (
 )
 
 // Pestañas del módulo de Producción Ganadera
-const TAB_DASHBOARD = 0
+const TAB_RESUMEN   = 0
 const TAB_LECHE     = 1
 const TAB_CARNE     = 2
 const TAB_PESO      = 3
 const TAB_LACTANCIAS = 4
 
 const TABS = [
-  { label: 'Dashboard',        Icon: BarChartOutlinedIcon },
+  { label: 'Resumen Productivo', Icon: BarChartOutlinedIcon },
   { label: 'Leche',            Icon: LocalDrinkOutlinedIcon },
   { label: 'Carne / Engorde',  Icon: RestaurantOutlinedIcon },
   { label: 'Registro Peso',    Icon: FitnessCenterOutlinedIcon },
@@ -68,6 +72,112 @@ const TIPO_LABEL = {
   LECHE: 'Leche',
   DOBLE_PROPOSITO: 'Doble propósito',
 }
+
+// Estados productivos del control de engorde + presentación visual
+const ESTADO_ENGORDE_OPCIONES = ['EN_ENGORDE', 'LISTO_VENTA', 'RETIRADO', 'VENDIDO']
+const ESTADO_ENGORDE_LABEL = {
+  EN_ENGORDE: 'En engorde',
+  LISTO_VENTA: 'Listo para venta',
+  RETIRADO: 'Retirado',
+  VENDIDO: 'Vendido',
+  SIN_ENGORDE: 'Sin engorde',
+}
+const ESTADO_ENGORDE_CHIP = {
+  EN_ENGORDE: { bgcolor: '#FEF3C7', color: '#92400E' },
+  LISTO_VENTA: { bgcolor: '#CCFBF1', color: '#0F766E' },
+  RETIRADO: { bgcolor: '#F1F5F9', color: '#475569' },
+  VENDIDO: { bgcolor: '#E0E7FF', color: '#3730A3' },
+  SIN_ENGORDE: { bgcolor: '#F1F5F9', color: '#64748B' },
+}
+
+const fmtFecha = (f) => (f ? new Date(String(f).split('T')[0]).toLocaleDateString('es-PY') : '—')
+
+// Tabla de Carne / Engorde: une los animales con su control de engorde activo.
+// Evita NaN mostrando 0 / "Sin datos" cuando no hay registros.
+const CarneEngordeTable = ({ rows, onIniciar, onCambiarEstado }) => (
+  <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Arete</TableCell>
+            <TableCell>Nombre</TableCell>
+            <TableCell>Sexo</TableCell>
+            <TableCell>Raza</TableCell>
+            <TableCell>Categoría</TableCell>
+            <TableCell>Tipo</TableCell>
+            <TableCell>Peso actual</TableCell>
+            <TableCell>Peso inicial</TableCell>
+            <TableCell>Peso objetivo</TableCell>
+            <TableCell>Inicio engorde</TableCell>
+            <TableCell>Días</TableCell>
+            <TableCell>Ganancia/día</TableCell>
+            <TableCell>Peso faltante</TableCell>
+            <TableCell>Estado productivo</TableCell>
+            <TableCell>Último pesaje</TableCell>
+            <TableCell>Acciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={16} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                No hay animales de carne o engorde activos.
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((r) => {
+              const enEngorde = !!r.engordeId
+              return (
+                <TableRow key={r.id} hover>
+                  <TableCell><Typography variant="body2" fontWeight={600}>{r.arete}</Typography></TableCell>
+                  <TableCell>{r.nombre || '—'}</TableCell>
+                  <TableCell>{r.sexo === 'MACHO' ? 'Macho' : 'Hembra'}</TableCell>
+                  <TableCell>{r.raza || '—'}</TableCell>
+                  <TableCell>{r.categoria || '—'}</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={TIPO_LABEL[r.tipoProduccion] || r.tipoProduccion}
+                      sx={{ bgcolor: '#EEF2FF', color: '#3730A3', fontWeight: 500 }} />
+                  </TableCell>
+                  <TableCell>{safeNum(r.pesoActual).toFixed(1)} kg</TableCell>
+                  <TableCell>{enEngorde ? `${safeNum(r.pesoInicial).toFixed(1)} kg` : '—'}</TableCell>
+                  <TableCell>{enEngorde ? `${safeNum(r.pesoObjetivo).toFixed(1)} kg` : '—'}</TableCell>
+                  <TableCell>{enEngorde ? fmtFecha(r.fechaInicio) : '—'}</TableCell>
+                  <TableCell>{enEngorde ? r.diasEngorde : '—'}</TableCell>
+                  <TableCell>{enEngorde ? `${safeNum(r.gananciaDiaria).toFixed(2)} kg` : '—'}</TableCell>
+                  <TableCell>{enEngorde ? `${safeNum(r.pesoFaltante).toFixed(1)} kg` : '—'}</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={ESTADO_ENGORDE_LABEL[r.estadoProductivo]}
+                      sx={{ ...ESTADO_ENGORDE_CHIP[r.estadoProductivo], fontWeight: 500 }} />
+                  </TableCell>
+                  <TableCell>{r.ultimoPesaje ? fmtFecha(r.ultimoPesaje) : 'Sin pesaje'}</TableCell>
+                  <TableCell>
+                    {!enEngorde ? (
+                      <Button size="small" variant="outlined" onClick={() => onIniciar(r.animal)}
+                        sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}>
+                        Iniciar engorde
+                      </Button>
+                    ) : (
+                      <Select size="small" value={r.estadoProductivo}
+                        onChange={(e) => onCambiarEstado(r.engordeId, e.target.value)}
+                        sx={{ minWidth: 150, fontSize: 13 }}>
+                        {ESTADO_ENGORDE_OPCIONES.map((op) => (
+                          <MenuItem key={op} value={op} sx={{ fontSize: 13 }}>
+                            {ESTADO_ENGORDE_LABEL[op]}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })
+          )}
+        </TableBody>
+      </Table>
+    </Box>
+  </Paper>
+)
 
 // Tabla reutilizable de animales para las secciones Leche y Carne / Engorde
 const AnimalesTable = ({ animales, emptyMsg }) => (
@@ -128,11 +238,20 @@ const AnimalesTable = ({ animales, emptyMsg }) => (
 
 export default function ProduccionPage() {
   const {
-    lactancias, produccionesHoy, produccionTotalHoy, top5Vacas,
-    animalesProduccion, loading,
+    lactancias, produccionesHoy, top5Vacas, resumen,
+    animalesProduccion, engordesActivos, registrosPeso, producciones,
+    iniciarEngorde, cambiarEstadoEngorde, loading,
   } = useProduccion()
-  const [tabIdx, setTabIdx] = useState(TAB_DASHBOARD)
+  const [tabIdx, setTabIdx] = useState(TAB_RESUMEN)
   const [mostrarNuevaLactancia, setMostrarNuevaLactancia] = useState(false)
+
+  // Engorde: diálogo "Iniciar engorde"
+  const [engordeOpen, setEngordeOpen] = useState(false)
+  const [engordeAnimal, setEngordeAnimal] = useState(null)
+
+  // Reportes reutilizables
+  const [reporteAnchor, setReporteAnchor] = useState(null)
+  const [reporteKey, setReporteKey] = useState(null)
 
   // Estados para filtros (sección Lactancias)
   const [searchTerm, setSearchTerm] = useState('')
@@ -201,27 +320,71 @@ export default function ProduccionPage() {
   if (loading) return <LoadingSpinner />
 
   // ==========================================
-  // MÉTRICAS DEL DASHBOARD (con valores seguros, sin NaN)
+  // DATOS PARA LAS PESTAÑAS
+  // Los KPIs del Resumen Productivo provienen del resolver `resumenProduccion`
+  // (fuente única en el backend); aquí solo derivamos las listas de detalle.
   // ==========================================
   const lactanciasActivas = lactancias.filter(l => l.estado === 'ACTIVA')
-  const totalLactancias = lactancias.length
 
-  // Promedio por vaca: media de la producción diaria de las lactancias activas.
-  // Si no hay lactancias activas (divisor 0) → 0, nunca NaN.
-  const promedio = (
-    lactanciasActivas.length > 0
-      ? lactanciasActivas.reduce((s, l) => s + safeNum(l.promedioDiario), 0) / lactanciasActivas.length
-      : 0
-  )
-  const promedioTexto = safeNum(promedio).toFixed(1)
-
-  // Animales (ya vienen sólo activos desde el backend)
+  // Animales (ya vienen sólo activos desde el backend) — según tipo_produccion:
+  // LECHE / DOBLE_PROPOSITO → leche; CARNE / DOBLE_PROPOSITO → carne / engorde
   const animalesCarne = animalesProduccion.filter(esCarne)
   const animalesLeche = animalesProduccion.filter(esLeche)
-  const animalesEnEngorde = animalesCarne.length
+
+  // Filas de Carne / Engorde: cada animal de carne/doble unido a su engorde
+  // activo (si lo tiene). Los animales sin engorde permiten "Iniciar engorde".
+  const engordePorAnimal = new Map(
+    engordesActivos.map((e) => [String(e.animal?.id), e])
+  )
+  const carneRows = animalesCarne.map((a) => {
+    const e = engordePorAnimal.get(String(a.id))
+    return {
+      id: a.id,
+      animal: a,
+      arete: a.nroArete,
+      nombre: a.nombre || '',
+      sexo: a.sexo,
+      raza: a.raza?.nombre || '',
+      categoria: a.categoria?.nombre || '',
+      tipoProduccion: a.tipoProduccion,
+      engordeId: e?.id || null,
+      pesoActual: e ? e.pesoActual : a.peso,
+      pesoInicial: e?.pesoInicial ?? 0,
+      pesoObjetivo: e?.pesoObjetivo ?? 0,
+      fechaInicio: e?.fechaInicio || null,
+      diasEngorde: e?.diasEnEngorde ?? 0,
+      gananciaDiaria: e?.gananciaDiaria ?? 0,
+      pesoFaltante: e?.pesoFaltante ?? 0,
+      estadoProductivo: e?.estado || 'SIN_ENGORDE',
+      ultimoPesaje: e?.ultimoPesajeFecha || ultimaFechaPesaje(a),
+      loteGrupo: e?.loteGrupo || '',
+      observaciones: e?.observaciones || '',
+    }
+  })
+
+  // Animales activos sin ningún registro de peso (para el reporte respectivo)
   const animalesSinPesaje = animalesProduccion.filter(
-    a => !a.registrosPeso || a.registrosPeso.length === 0
-  ).length
+    (a) => !a.registrosPeso || a.registrosPeso.length === 0
+  )
+
+  // Configuraciones de reportes reutilizables (componente ReportModalReusable)
+  const reporteConfigs = buildProduccionReportConfigs({
+    subtitulo: 'Módulo de Producción Ganadera',
+    produccionesLeche: producciones,
+    registrosPeso,
+    lactancias,
+    carneRows,
+    animalesSinPesaje,
+  })
+  const reporteActual = reporteConfigs.find((r) => r.key === reporteKey)
+
+  const abrirEngorde = (animal) => {
+    setEngordeAnimal(animal)
+    setEngordeOpen(true)
+  }
+  const cambiarEstado = async (engordeId, estado) => {
+    await cambiarEstadoEngorde(engordeId, estado)
+  }
 
   const tabsWithCount = TABS.map((t, i) => ({
     ...t,
@@ -233,34 +396,36 @@ export default function ProduccionPage() {
 
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Box>
-        <Typography variant="h5" fontWeight={700}>Módulo de Producción Ganadera</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Gestión de leche, carne, pesajes, lactancias y rendimiento animal
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+        <Box>
+          <Typography variant="h5" fontWeight={700}>Módulo de Producción Ganadera</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Gestión de leche, carne, pesajes, lactancias y rendimiento animal
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<AssessmentOutlinedIcon />}
+          onClick={(e) => setReporteAnchor(e.currentTarget)}
+          sx={{ textTransform: 'none', flexShrink: 0 }}
+        >
+          Reportes
+        </Button>
+        <Menu
+          anchorEl={reporteAnchor}
+          open={Boolean(reporteAnchor)}
+          onClose={() => setReporteAnchor(null)}
+        >
+          {reporteConfigs.map((r) => (
+            <MenuItem
+              key={r.key}
+              onClick={() => { setReporteKey(r.key); setReporteAnchor(null) }}
+            >
+              {r.label}
+            </MenuItem>
+          ))}
+        </Menu>
       </Box>
-
-      {/* Indicadores del Dashboard */}
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
-          <KPI label="Producción leche hoy" value={`${safeNum(produccionTotalHoy)} L`} sub={`${produccionesHoy.length} registros`} accent="#1565C0" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
-          <KPI label="Lactancias activas" value={lactanciasActivas.length} accent="#2E7D32" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
-          <KPI label="Total lactancias" value={totalLactancias} accent="#6A1B9A" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
-          <KPI label="Promedio por vaca" value={`${promedioTexto} L/día`} accent="#E65100" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
-          <KPI label="Animales en engorde" value={animalesEnEngorde} accent="#B45309" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
-          <KPI label="Animales sin pesaje" value={animalesSinPesaje} accent="#64748B" />
-        </Grid>
-      </Grid>
 
       {/* Barra de búsqueda y filtros - solo visible en la pestaña de Lactancias */}
       {tabIdx === TAB_LACTANCIAS && (
@@ -399,9 +564,45 @@ export default function ProduccionPage() {
         </Tabs>
       </Box>
 
-      {/* ===================== Dashboard ===================== */}
-      {tabIdx === TAB_DASHBOARD && (
+      {/* ===================== Resumen Productivo ===================== */}
+      {tabIdx === TAB_RESUMEN && (
         <Grid container spacing={2}>
+          {/* Título interno: deja claro que es solo el resumen de este módulo */}
+          <Grid item xs={12}>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700}>
+                Resumen de Producción
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Indicadores exclusivos de leche, carne, pesajes y lactancias de este módulo.
+                Los indicadores generales de la finca están en el Dashboard principal.
+              </Typography>
+            </Box>
+          </Grid>
+
+          {/* Indicadores productivos (fuente única: resumenProduccion del backend) */}
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Producción leche hoy" value={`${safeNum(resumen?.produccionLecheHoy)} L`} sub={`${produccionesHoy.length} registros`} accent="#1565C0" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Promedio litros/vaca" value={`${safeNum(resumen?.promedioLitrosVaca).toFixed(1)} L/día`} sub="Vacas en lactancia activa" accent="#E65100" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Lactancias activas" value={safeNum(resumen?.lactanciasActivas)} accent="#2E7D32" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Animales en engorde" value={safeNum(resumen?.animalesEngorde)} sub="Carne y doble propósito" accent="#B45309" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Ganancia diaria promedio" value={`${safeNum(resumen?.gananciaDiariaPromedio).toFixed(2)} kg/día`} sub="Animales en engorde" accent="#6A1B9A" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Animales sin pesaje" value={safeNum(resumen?.animalesSinPesaje)} accent="#64748B" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
+            <KPI label="Listos para venta" value={safeNum(resumen?.animalesListosVenta)} sub="Engorde con peso objetivo alcanzado" accent="#0F766E" />
+          </Grid>
+
           {top5Vacas && top5Vacas.length > 0 && (
             <Grid item xs={12}>
               <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, p: 2 }}>
@@ -470,7 +671,7 @@ export default function ProduccionPage() {
       {/* ===================== Leche ===================== */}
       {tabIdx === TAB_LECHE && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <ProduccionLecheForm onSuccess={() => setTabIdx(TAB_DASHBOARD)} />
+          <ProduccionLecheForm onSuccess={() => setTabIdx(TAB_RESUMEN)} />
           <Box>
             <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
               Animales de leche
@@ -486,18 +687,23 @@ export default function ProduccionPage() {
       {/* ===================== Carne / Engorde ===================== */}
       {tabIdx === TAB_CARNE && (
         <Box>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
             Animales de carne y engorde
           </Typography>
-          <AnimalesTable
-            animales={animalesCarne}
-            emptyMsg="No hay animales de carne o engorde registrados."
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Animales activos de tipo Carne y Doble propósito. Iniciá el engorde para
+            seguir días, ganancia diaria y peso faltante hasta el objetivo.
+          </Typography>
+          <CarneEngordeTable
+            rows={carneRows}
+            onIniciar={abrirEngorde}
+            onCambiarEstado={cambiarEstado}
           />
         </Box>
       )}
 
       {/* ===================== Registro Peso ===================== */}
-      {tabIdx === TAB_PESO && <RegistroPesoForm onSuccess={() => setTabIdx(TAB_DASHBOARD)} />}
+      {tabIdx === TAB_PESO && <RegistroPesoForm onSuccess={() => setTabIdx(TAB_RESUMEN)} />}
 
       {/* ===================== Lactancias ===================== */}
       {tabIdx === TAB_LACTANCIAS && (
@@ -569,6 +775,21 @@ export default function ProduccionPage() {
           </Paper>
         </Box>
       )}
+
+      {/* ===================== Diálogo: iniciar engorde ===================== */}
+      <IniciarEngordeDialog
+        open={engordeOpen}
+        onClose={() => setEngordeOpen(false)}
+        animal={engordeAnimal}
+        onSubmit={iniciarEngorde}
+      />
+
+      {/* ===================== Reportes reutilizables ===================== */}
+      <ReportModalReusable
+        open={Boolean(reporteActual)}
+        onClose={() => setReporteKey(null)}
+        {...(reporteActual?.config || {})}
+      />
     </Box>
   )
 }

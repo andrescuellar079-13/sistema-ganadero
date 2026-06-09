@@ -57,7 +57,7 @@ def generar_alertas_automaticas(finca_id):
     from sanidad.models import Vacunacion
     from reproduccion.models import Reproduccion
     from catalogos.models import Medicamento, Alimento
-    from produccion.models import RegistroPeso
+    from produccion.models import RegistroPeso, EngordeAnimal
     from fincas.models import TransferenciaFinca
     from animales.models import Animal
 
@@ -69,6 +69,7 @@ def generar_alertas_automaticas(finca_id):
         "stock_bajo_medicamento": 0,
         "stock_bajo_alimento": 0,
         "pesajes_pendientes": 0,
+        "animales_listos_venta": 0,
         "transferencias_pendientes": 0,
     }
 
@@ -206,6 +207,32 @@ def generar_alertas_automaticas(finca_id):
                 accion_recomendada="Registrar un nuevo pesaje del animal.",
             ):
                 conteos["pesajes_pendientes"] += 1
+
+    # ---- Animal listo para venta (produccion): engorde que alcanzó el peso
+    # objetivo. La lógica de estado vive en EngordeAnimal; aquí solo se notifica
+    # de forma idempotente (una alerta PENDIENTE por engorde). ----
+    engordes_listos = (
+        EngordeAnimal.objects
+        .filter(finca_id=finca_id, estado="LISTO_VENTA")
+        .select_related("animal")
+    )
+    for e in engordes_listos:
+        if _crear_si_no_existe(
+            finca_id,
+            tipo="ANIMAL_LISTO_VENTA",
+            mensaje=(
+                f"{_label_animal(e.animal)} alcanzó el peso objetivo "
+                f"({e.peso_objetivo} kg) y está listo para venta."
+            ),
+            fecha_alerta=hoy,
+            referencia_tipo="EngordeAnimal",
+            referencia_id=e.id,
+            prioridad="MEDIA",
+            modulo_origen="PRODUCCION",
+            animal=e.animal,
+            accion_recomendada="Evaluar la venta o el retiro del animal del engorde.",
+        ):
+            conteos["animales_listos_venta"] += 1
 
     # ---- Transferencias pendientes (fincas): confirmadas no recibidas ----
     from django.db.models import Q

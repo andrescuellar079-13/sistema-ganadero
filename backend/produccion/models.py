@@ -1,3 +1,6 @@
+from datetime import date
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 
@@ -64,10 +67,26 @@ class RegistroPeso(models.Model):
                 diferencia = self.peso_kg - peso_anterior.peso_kg
                 self.ganancia_diaria = diferencia / dias
 
-        self.animal.peso = self.peso_kg
-        self.animal.save(update_fields=["peso"])
-
         super().save(*args, **kwargs)
+
+        # El peso actual del animal refleja siempre el pesaje más reciente
+        # (no se sobreescribe con un pesaje retroactivo más antiguo).
+        ultimo = (
+            RegistroPeso.objects
+            .filter(animal=self.animal)
+            .order_by("-fecha_pesaje", "-fecha_registro")
+            .first()
+        )
+        if ultimo:
+            self.animal.peso = ultimo.peso_kg
+            self.animal.save(update_fields=["peso"])
+
+        # Si el animal tiene un engorde activo, recalcular su estado productivo
+        # (días, ganancia y peso faltante son propiedades derivadas; aquí solo
+        # se actualiza el estado a LISTO_VENTA al alcanzar el peso objetivo).
+        engorde = self.animal.engordes.filter(estado="EN_ENGORDE").first()
+        if engorde:
+            engorde.actualizar_estado()
 
     def __str__(self):
         return f"{self.animal} - {self.peso_kg} kg - {self.fecha_pesaje}"
@@ -249,3 +268,115 @@ class AlimentoAnimal(models.Model):
 
     def __str__(self):
         return f"{self.animal} - {self.alimento} - {self.cantidad}"
+
+
+class EngordeAnimal(models.Model):
+    """Control de engorde / producción de carne de un animal.
+
+    Un animal CARNE o DOBLE_PROPOSITO entra en engorde con un peso inicial y
+    un peso objetivo. Los días en engorde, la ganancia diaria y el peso
+    faltante se derivan del último pesaje registrado (no se almacenan), de modo
+    que el Registro de Peso alimenta automáticamente este control.
+    """
+
+    TIPO_ENGORDE_CHOICES = [
+        ("INTENSIVO", "Intensivo"),
+        ("EXTENSIVO", "Extensivo"),
+        ("SEMI_INTENSIVO", "Semi-intensivo"),
+    ]
+
+    ESTADO_CHOICES = [
+        ("EN_ENGORDE", "En engorde"),
+        ("LISTO_VENTA", "Listo para venta"),
+        ("RETIRADO", "Retirado"),
+        ("VENDIDO", "Vendido"),
+    ]
+
+    # Estados productivos que mantienen el engorde "abierto"
+    ESTADOS_ACTIVOS = ("EN_ENGORDE", "LISTO_VENTA")
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="engordes"
+    )
+    animal = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="engordes"
+    )
+
+    fecha_inicio = models.DateField()
+    peso_inicial = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    peso_objetivo = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    tipo_engorde = models.CharField(
+        max_length=20,
+        choices=TIPO_ENGORDE_CHOICES,
+        default="SEMI_INTENSIVO"
+    )
+    lote_grupo = models.CharField(max_length=100, blank=True, null=True)
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default="EN_ENGORDE"
+    )
+
+    observaciones = models.TextField(blank=True, null=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="engordes_registrados"
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_inicio"]
+        verbose_name = "Engorde de animal"
+        verbose_name_plural = "Engordes de animales"
+        indexes = [
+            models.Index(fields=["finca", "estado"], name="eng_finca_estado_idx"),
+            models.Index(fields=["animal", "estado"], name="eng_animal_estado_idx"),
+        ]
+
+    # --- Datos derivados (no se almacenan; dependen del último pesaje) ---
+    @property
+    def peso_actual(self):
+        return self.animal.peso or Decimal("0")
+
+    @property
+    def ultimo_pesaje_fecha(self):
+        ultimo = self.animal.registros_peso.order_by("-fecha_pesaje").first()
+        return ultimo.fecha_pesaje if ultimo else None
+
+    @property
+    def dias_en_engorde(self):
+        ref = self.ultimo_pesaje_fecha or date.today()
+        dias = (ref - self.fecha_inicio).days
+        return dias if dias > 0 else 0
+
+    @property
+    def ganancia_diaria(self):
+        dias = self.dias_en_engorde
+        if dias <= 0:
+            return Decimal("0")
+        return (self.peso_actual - self.peso_inicial) / dias
+
+    @property
+    def peso_faltante(self):
+        faltante = self.peso_objetivo - self.peso_actual
+        return faltante if faltante > 0 else Decimal("0")
+
+    def actualizar_estado(self):
+        """Pasa el engorde a LISTO_VENTA cuando alcanza el peso objetivo."""
+        if self.estado == "EN_ENGORDE" and self.peso_actual >= self.peso_objetivo:
+            self.estado = "LISTO_VENTA"
+            self.save(update_fields=["estado"])
+
+    def __str__(self):
+        return f"Engorde {self.animal} ({self.estado})"
