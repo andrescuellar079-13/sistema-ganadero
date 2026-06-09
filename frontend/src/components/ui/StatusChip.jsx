@@ -9,6 +9,8 @@ const PRESET = {
   INACTIVO:     { color: 'default', label: 'Inactivo'    },
   LICENCIA:     { color: 'warning', label: 'Licencia'    },
   VACACIONES:   { color: 'info',    label: 'Vacaciones'  },
+  SUSPENDIDO:   { color: 'error',   label: 'Suspendido'  },
+  RETIRADO:     { color: 'default', label: 'Retirado'    },
   // estados operativos de parcela
   LIBRE:    { color: 'success', label: 'Libre'    },
   OCUPADO:  { color: 'primary', label: 'Ocupado'  },

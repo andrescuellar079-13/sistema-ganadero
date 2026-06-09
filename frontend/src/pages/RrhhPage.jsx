@@ -7,6 +7,7 @@ import StatusChip from '../components/ui/StatusChip'
 import EmptyState from '../components/ui/EmptyState'
 import TipoEmpleadoForm from '../components/TipoEmpleadoForm'
 import EmpleadoForm from '../components/EmpleadoForm'
+import { tipoEmpleadoLabel } from '../constants/rrhh'
 
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
@@ -67,7 +68,10 @@ export default function RrhhPage() {
 
   const handleEliminarEmp = async () => {
     const r = await eliminarEmpleado(confirmEmpId)
-    notify(r.success ? 'success' : 'error', r.success ? 'Empleado eliminado' : r.error)
+    // r.success = éxito de red; r.data.success = resultado de la regla de negocio
+    // (p. ej. bloqueo por registros relacionados).
+    const ok = r.success && (r.data?.success ?? true)
+    notify(ok ? 'success' : 'error', ok ? 'Empleado eliminado' : (r.data?.message || r.error))
     setConfirmEmpId(null)
   }
 
@@ -78,7 +82,7 @@ export default function RrhhPage() {
     e.tipo?.nombre?.toLowerCase().includes(busqueda.toLowerCase())
   )
 
-  const activos = empleados.filter(e => e.estado === 'ACTIVO').length
+  const activos = empleados.filter(e => e.estadoLaboral === 'ACTIVO').length
 
   if (loading) return <LoadingSpinner />
 
@@ -143,10 +147,12 @@ export default function RrhhPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Empleado</TableCell>
-                      <TableCell>Contacto</TableCell>
-                      <TableCell>Ingreso</TableCell>
+                      <TableCell>Cargo</TableCell>
+                      <TableCell>Tipo empleado</TableCell>
+                      <TableCell>Finca</TableCell>
+                      <TableCell>Teléfono</TableCell>
                       <TableCell>Salario</TableCell>
-                      <TableCell>Estado</TableCell>
+                      <TableCell>Estado laboral</TableCell>
                       <TableCell align="right">Acciones</TableCell>
                     </TableRow>
                   </TableHead>
@@ -162,19 +168,24 @@ export default function RrhhPage() {
                               </Avatar>
                               <Box>
                                 <Typography variant="body2" fontWeight={600}>{emp.nombreCompleto}</Typography>
-                                <Typography variant="caption" color="text.secondary">{emp.tipo?.nombre || '—'}</Typography>
                                 {emp.ci && <Typography variant="caption" color="text.disabled" display="block">CI {emp.ci}</Typography>}
                               </Box>
                             </Box>
                           </TableCell>
                           <TableCell>
-                            {emp.telefono && <Typography variant="body2">{emp.telefono}</Typography>}
-                            {emp.email && <Typography variant="caption" color="text.secondary">{emp.email}</Typography>}
-                            {!emp.telefono && !emp.email && '—'}
+                            <Typography variant="body2">{emp.tipo?.nombre || emp.cargoNombre || '—'}</Typography>
                           </TableCell>
-                          <TableCell>{fmt.fecha(emp.fechaIngreso)}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">{tipoEmpleadoLabel(emp.tipoEmpleado)}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{emp.finca?.nombre || '—'}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{emp.telefono || '—'}</Typography>
+                          </TableCell>
                           <TableCell><Typography variant="body2" fontWeight={500}>{fmt.salario(emp.salario)}</Typography></TableCell>
-                          <TableCell><StatusChip value={emp.estado} /></TableCell>
+                          <TableCell><StatusChip value={emp.estadoLaboral} /></TableCell>
                           <TableCell align="right">
                             <Tooltip title="Editar">
                               <IconButton size="small" color="warning" onClick={() => { setEditEmp(emp); setShowEmpModal(true) }}>

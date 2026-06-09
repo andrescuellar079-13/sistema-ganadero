@@ -11,6 +11,8 @@ import {
   UPDATE_EMPLEADO,
   DELETE_EMPLEADO,
 } from '../graphql/rrhh'
+import { GET_USUARIOS } from '../graphql/usuarios'
+import { GET_FINCAS } from '../graphql/fincas'
 
 export const useRrhh = () => {
   const fincaId = localStorage.getItem('fincaId') || '1'
@@ -27,6 +29,10 @@ export const useRrhh = () => {
   const { data: empleadosActivos, loading: loadingActivos, refetch: refetchActivos } = useQuery(GET_EMPLEADOS_ACTIVOS, {
     variables: { fincaId }
   })
+
+  // Usuarios y fincas para los selectores del formulario (acceso al sistema / finca asignada)
+  const { data: usuarios } = useQuery(GET_USUARIOS)
+  const { data: fincas } = useQuery(GET_FINCAS)
 
   // Mutations - Tipos
   const [crearTipoMutation] = useMutation(CREATE_TIPO_EMPLEADO)
@@ -108,6 +114,8 @@ export const useRrhh = () => {
     tipos: tipos?.tiposEmpleado || [],
     empleados: empleados?.empleados || [],
     empleadosActivos: empleadosActivos?.empleadosActivos || [],
+    usuarios: usuarios?.usuarios || [],
+    fincas: fincas?.fincas || [],
 
     // Loading
     loading: loadingTipos || loadingEmpleados || loadingActivos,

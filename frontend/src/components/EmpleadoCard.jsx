@@ -5,9 +5,9 @@ const EmpleadoCard = ({ empleado, onEditar, onEliminar }) => {
   const getEstadoColor = (estado) => {
     const colores = {
       'ACTIVO': 'bg-green-100 text-green-800',
-      'INACTIVO': 'bg-red-100 text-red-800',
       'LICENCIA': 'bg-yellow-100 text-yellow-800',
-      'VACACIONES': 'bg-blue-100 text-blue-800',
+      'SUSPENDIDO': 'bg-red-100 text-red-800',
+      'RETIRADO': 'bg-gray-100 text-gray-800',
     }
     return colores[estado] || 'bg-gray-100 text-gray-800'
   }
@@ -15,9 +15,9 @@ const EmpleadoCard = ({ empleado, onEditar, onEliminar }) => {
   const getEstadoIcono = (estado) => {
     const iconos = {
       'ACTIVO': '✅',
-      'INACTIVO': '❌',
       'LICENCIA': '📋',
-      'VACACIONES': '🏖️',
+      'SUSPENDIDO': '⛔',
+      'RETIRADO': '📤',
     }
     return iconos[estado] || '📌'
   }
@@ -52,8 +52,8 @@ const EmpleadoCard = ({ empleado, onEditar, onEliminar }) => {
               <p className="text-sm text-blue-200">{empleado.tipo?.nombre}</p>
             </div>
           </div>
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(empleado.estado)}`}>
-            {getEstadoIcono(empleado.estado)} {empleado.estado}
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(empleado.estadoLaboral)}`}>
+            {getEstadoIcono(empleado.estadoLaboral)} {empleado.estadoLaboral}
           </span>
         </div>
       </div>
@@ -92,10 +92,10 @@ const EmpleadoCard = ({ empleado, onEditar, onEliminar }) => {
               <span className="font-medium text-green-600">{formatearSalario(empleado.salario)}</span>
             </div>
           </div>
-          {empleado.fechaRetiro && (
+          {empleado.fechaSalida && (
             <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-              <span className="text-gray-400">📅 Retiro:</span>
-              <span>{formatearFecha(empleado.fechaRetiro)}</span>
+              <span className="text-gray-400">📅 Salida:</span>
+              <span>{formatearFecha(empleado.fechaSalida)}</span>
             </div>
           )}
         </div>
