@@ -4,7 +4,7 @@ import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
   Typography, Chip, Stack, IconButton, Tooltip, TextField,
   InputAdornment, MenuItem, Select, FormControl, InputLabel,
-  Button, Alert,
+  Button, Alert, Tabs, Tab, Badge,
 } from '@mui/material'
 import SearchIcon          from '@mui/icons-material/Search'
 import ClearIcon           from '@mui/icons-material/Clear'
@@ -20,22 +20,51 @@ import TransferenciaFormDialog  from './TransferenciaFormDialog'
 import TransferenciaDetalleDialog from './TransferenciaDetalleDialog'
 
 const ESTADO_COLORS = {
-  BORRADOR:   'default',
-  CONFIRMADA: 'primary',
-  RECIBIDA:   'success',
-  CANCELADA:  'error',
+  BORRADOR:            'default',
+  PENDIENTE_RECEPCION: 'warning',
+  RECIBIDA:            'success',
+  RECHAZADA:           'error',
+  CANCELADA:           'error',
 }
 
 const ESTADO_OPTS = [
-  { value: '',          label: 'Todos los estados' },
-  { value: 'BORRADOR',  label: 'Borrador' },
-  { value: 'CONFIRMADA',label: 'Confirmadas' },
-  { value: 'RECIBIDA',  label: 'Recibidas' },
-  { value: 'CANCELADA', label: 'Canceladas' },
+  { value: '',                    label: 'Todos los estados' },
+  { value: 'BORRADOR',            label: 'Borrador' },
+  { value: 'PENDIENTE_RECEPCION', label: 'Pendientes de recepción' },
+  { value: 'RECIBIDA',            label: 'Recibidas' },
+  { value: 'RECHAZADA',           label: 'Rechazadas' },
+  { value: 'CANCELADA',           label: 'Canceladas' },
 ]
+
+// Pestañas de alto nivel: clasifican según relación con la finca activa.
+const VISTAS = [
+  { key: 'TODAS',      label: 'Todas' },
+  { key: 'PENDIENTES', label: 'Pendientes' },
+  { key: 'ENVIADAS',   label: 'Enviadas' },
+  { key: 'RECIBIDAS',  label: 'Recibidas' },
+  { key: 'HISTORIAL',  label: 'Historial' },
+]
+
+function filtrarPorVista(transferencias, vista) {
+  switch (vista) {
+    case 'PENDIENTES':
+      // Pendientes de que YO (finca destino) acepte/rechace
+      return transferencias.filter(t => t.estado === 'PENDIENTE_RECEPCION' && t.esDestino)
+    case 'ENVIADAS':
+      // Salieron de mi finca origen
+      return transferencias.filter(t => t.esOrigen && t.estado !== 'BORRADOR')
+    case 'RECIBIDAS':
+      return transferencias.filter(t => t.esDestino && t.estado === 'RECIBIDA')
+    case 'HISTORIAL':
+      return transferencias.filter(t => ['RECIBIDA', 'RECHAZADA', 'CANCELADA'].includes(t.estado))
+    default:
+      return transferencias
+  }
+}
 
 export default function TransferenciasTab({ fincas = [], fincaId = null }) {
   const [filtros, setFiltros] = useState({ fincaId, estado: '', buscar: '' })
+  const [vista, setVista] = useState('TODAS')
   const [detalleId, setDetalleId] = useState(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editando, setEditando] = useState(null)
@@ -45,9 +74,12 @@ export default function TransferenciasTab({ fincas = [], fincaId = null }) {
   const {
     transferencias, paginacion, loading, error,
     crearTransferencia, actualizarTransferencia,
+    enviarTransferencia, aceptarTransferencia, rechazarTransferencia,
     confirmarTransferencia, cancelarTransferencia,
     marcarRecibida, agregarAnimal, quitarAnimal, refetch,
   } = useTransferencias(filtros)
+
+  const visibles = filtrarPorVista(transferencias, vista)
 
   const notify = (r) => {
     setMensaje({ type: r.success ? 'success' : 'error', text: r.message })
@@ -99,6 +131,31 @@ export default function TransferenciasTab({ fincas = [], fincaId = null }) {
 
       <PageAlert message={mensaje} onClose={() => setMensaje(null)} />
 
+      {/* Pestañas de vista (Enviadas / Recibidas / Pendientes / Historial) */}
+      <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2 }}>
+        <Tabs
+          value={vista}
+          onChange={(_, v) => setVista(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          {VISTAS.map(v => {
+            const n = filtrarPorVista(transferencias, v.key).length
+            return (
+              <Tab
+                key={v.key}
+                value={v.key}
+                label={
+                  v.key === 'PENDIENTES' && n > 0
+                    ? <Badge color="warning" badgeContent={n} sx={{ pr: 1.5 }}>{v.label}</Badge>
+                    : `${v.label}${n ? ` (${n})` : ''}`
+                }
+              />
+            )
+          })}
+        </Tabs>
+      </Paper>
+
       {/* Filtros */}
       <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
@@ -137,7 +194,7 @@ export default function TransferenciasTab({ fincas = [], fincaId = null }) {
 
       {error && <Alert severity="error">{error.message}</Alert>}
 
-      {!loading && transferencias.length === 0 ? (
+      {!loading && visibles.length === 0 ? (
         <EmptyState
           icon={SwapHorizIcon}
           title={hayFiltros ? 'No hay transferencias con esos filtros' : 'No hay transferencias registradas'}
@@ -163,7 +220,7 @@ export default function TransferenciasTab({ fincas = [], fincaId = null }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {transferencias.map(t => (
+                {visibles.map(t => (
                   <TableRow key={t.id} hover>
                     <TableCell>{t.fechaTransferencia}</TableCell>
                     <TableCell>
@@ -224,9 +281,10 @@ export default function TransferenciasTab({ fincas = [], fincaId = null }) {
         fincas={fincas}
         onAgregarAnimal={agregarAnimal}
         onQuitarAnimal={quitarAnimal}
-        onConfirmar={confirmarTransferencia}
+        onEnviar={enviarTransferencia}
+        onAceptar={aceptarTransferencia}
+        onRechazar={rechazarTransferencia}
         onCancelar={cancelarTransferencia}
-        onMarcarRecibida={marcarRecibida}
         loadingAction={loadingAction}
       />
     </Box>

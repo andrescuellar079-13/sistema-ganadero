@@ -51,6 +51,27 @@ export const GET_FINCA_ACTUAL = gql`
   }
 `
 
+// Fincas a las que el usuario actual tiene acceso (para el selector de finca activa)
+export const GET_MIS_FINCAS = gql`
+  query GetMisFincas {
+    misFincas {
+      id
+      nombre
+      municipio
+    }
+  }
+`
+
+export const SELECCIONAR_FINCA_ACTIVA = gql`
+  mutation SeleccionarFincaActiva($fincaId: ID!) {
+    seleccionarFincaActiva(fincaId: $fincaId) {
+      success
+      message
+      usuario { id finca { id nombre } }
+    }
+  }
+`
+
 // ==========================================
 // MUTATIONS – FINCAS
 // ==========================================
@@ -135,7 +156,14 @@ const TRANSFERENCIA_FIELDS = gql`
     registradoPorNombre
     fechaRegistro
     fechaConfirmacion
+    fechaEnvio
+    fechaRecepcion
+    motivoRechazo
     totalAnimales
+    esOrigen
+    esDestino
+    puedeRecibir
+    puedeCancelar
   }
 `
 
@@ -375,6 +403,41 @@ export const MARCAR_TRANSFERENCIA_RECIBIDA = gql`
   ${TRANSFERENCIA_FIELDS}
   mutation MarcarTransferenciaRecibida($id: ID!) {
     marcarTransferenciaRecibida(id: $id) {
+      transferencia { ...TransferenciaFields }
+      success
+      message
+    }
+  }
+`
+
+// --- Flujo de recepción multi-tenant ---
+
+export const ENVIAR_TRANSFERENCIA = gql`
+  ${TRANSFERENCIA_FIELDS}
+  mutation EnviarTransferencia($id: ID!, $recepcionInmediata: Boolean) {
+    enviarTransferencia(id: $id, recepcionInmediata: $recepcionInmediata) {
+      transferencia { ...TransferenciaFields }
+      success
+      message
+    }
+  }
+`
+
+export const ACEPTAR_TRANSFERENCIA = gql`
+  ${TRANSFERENCIA_FIELDS}
+  mutation AceptarTransferencia($id: ID!) {
+    aceptarTransferencia(id: $id) {
+      transferencia { ...TransferenciaFields }
+      success
+      message
+    }
+  }
+`
+
+export const RECHAZAR_TRANSFERENCIA = gql`
+  ${TRANSFERENCIA_FIELDS}
+  mutation RechazarTransferencia($id: ID!, $motivoRechazo: String) {
+    rechazarTransferencia(id: $id, motivoRechazo: $motivoRechazo) {
       transferencia { ...TransferenciaFields }
       success
       message

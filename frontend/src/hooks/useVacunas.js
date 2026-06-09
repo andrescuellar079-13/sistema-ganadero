@@ -10,7 +10,12 @@ export const useVacunas = () => {
 
   const crearVacuna = async (input) => {
     try {
-      const result = await createVacuna({ variables: input })
+      // La vacuna siempre se crea en la finca activa (no en una finca fija).
+      const fincaId = localStorage.getItem('fincaId')
+      if (!fincaId) {
+        return { success: false, message: 'No hay una finca activa seleccionada.' }
+      }
+      const result = await createVacuna({ variables: { ...input, fincaId } })
       if (result.data.crearVacuna.success) {
         refetch()
         return { success: true, message: result.data.crearVacuna.message }

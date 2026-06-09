@@ -76,6 +76,7 @@ export const AuthProvider = ({ children }) => {
       const esErrorAuth = errors?.some(
         (e) =>
           e.message?.toLowerCase().includes('not authenticated') ||
+          e.message?.toLowerCase().includes('no autenticado') ||
           e.message?.toLowerCase().includes('signature has expired') ||
           e.message?.toLowerCase().includes('invalid token')
       )

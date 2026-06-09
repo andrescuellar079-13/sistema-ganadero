@@ -20,10 +20,11 @@ import { GET_TRANSFERENCIA_DETALLE } from '../../graphql/fincas'
 import { GET_PARCELAS }              from '../../graphql/parcelas'
 
 const ESTADO_COLORS = {
-  BORRADOR:   'default',
-  CONFIRMADA: 'primary',
-  RECIBIDA:   'success',
-  CANCELADA:  'error',
+  BORRADOR:            'default',
+  PENDIENTE_RECEPCION: 'warning',
+  RECIBIDA:            'success',
+  RECHAZADA:           'error',
+  CANCELADA:           'error',
 }
 
 function ParcelalSelector({ fincaDestinoId, value, onChange }) {
@@ -50,9 +51,10 @@ export default function TransferenciaDetalleDialog({
   fincas = [],
   onAgregarAnimal,
   onQuitarAnimal,
-  onConfirmar,
+  onEnviar,
+  onAceptar,
+  onRechazar,
   onCancelar,
-  onMarcarRecibida,
   loadingAction = false,
 }) {
   const { data, loading, refetch } = useQuery(GET_TRANSFERENCIA_DETALLE, {
@@ -66,11 +68,14 @@ export default function TransferenciaDetalleDialog({
   const [seleccionados, setSeleccionados] = useState(new Map())
   const [parcelasDestino, setParcelasDestino] = useState({})
   const [confirmAccion, setConfirmAccion] = useState(null)
+  const [motivoRechazo, setMotivoRechazo] = useState('')
   const [mensaje, setMensaje] = useState(null)
   const printRef = useRef()
 
   const esBorrador = t?.estado === 'BORRADOR'
-  const esConfirmada = t?.estado === 'CONFIRMADA'
+  const esPendiente = t?.estado === 'PENDIENTE_RECEPCION'
+  // Transferencia interna: el usuario administra origen y destino.
+  const esInterna = !!(t?.esOrigen && t?.esDestino)
 
   const handleToggle = (animal) => {
     setSeleccionados(prev => {
@@ -122,9 +127,14 @@ export default function TransferenciaDetalleDialog({
   const handleAccion = async (accion) => {
     setConfirmAccion(null)
     let result
-    if (accion === 'confirmar') result = await onConfirmar(t.id)
+    if (accion === 'enviar') result = await onEnviar(t.id, false)
+    else if (accion === 'enviar_interna') result = await onEnviar(t.id, true)
+    else if (accion === 'aceptar') result = await onAceptar(t.id)
+    else if (accion === 'rechazar') {
+      result = await onRechazar(t.id, motivoRechazo || null)
+      setMotivoRechazo('')
+    }
     else if (accion === 'cancelar') result = await onCancelar(t.id)
-    else if (accion === 'recibir') result = await onMarcarRecibida(t.id)
     setMensaje({ type: result?.success ? 'success' : 'error', text: result?.message })
     await refetch()
     setTimeout(() => setMensaje(null), 4000)
@@ -369,28 +379,47 @@ export default function TransferenciaDetalleDialog({
               </Button>
             )}
 
-            {esBorrador && t.totalAnimales > 0 && (
+            {/* Enviar (origen, borrador). Interna -> recepción inmediata. */}
+            {esBorrador && t.totalAnimales > 0 && t.esOrigen && (
               <Button
-                variant="contained" color="success"
+                variant="contained" color="primary"
                 startIcon={<CheckCircleOutlinedIcon />}
-                onClick={() => setConfirmAccion('confirmar')}
+                onClick={() => setConfirmAccion(esInterna ? 'enviar_interna' : 'enviar')}
                 disabled={loadingAction}
               >
-                Confirmar transferencia
+                {esInterna ? 'Transferir (interna)' : 'Enviar transferencia'}
               </Button>
             )}
 
-            {esConfirmada && (
-              <Button
-                variant="contained" color="info"
-                onClick={() => setConfirmAccion('recibir')}
-                disabled={loadingAction}
-              >
-                Marcar como recibida
-              </Button>
+            {/* Pendiente de recepción y el usuario es la finca destino */}
+            {esPendiente && t.puedeRecibir && (
+              <>
+                <Button
+                  variant="contained" color="success"
+                  startIcon={<CheckCircleOutlinedIcon />}
+                  onClick={() => setConfirmAccion('aceptar')}
+                  disabled={loadingAction}
+                >
+                  Aceptar
+                </Button>
+                <Button
+                  variant="outlined" color="error"
+                  startIcon={<CancelOutlinedIcon />}
+                  onClick={() => setConfirmAccion('rechazar')}
+                  disabled={loadingAction}
+                >
+                  Rechazar
+                </Button>
+              </>
             )}
 
-            {(esBorrador || esConfirmada) && (
+            {/* Pendiente y el usuario es solo origen: estado informativo */}
+            {esPendiente && !t.puedeRecibir && t.esOrigen && (
+              <Chip color="warning" label="Pendiente de recepción" variant="outlined" />
+            )}
+
+            {/* Cancelar: solo origen mientras esté en borrador o pendiente */}
+            {t.puedeCancelar && (
               <Button
                 color="error" variant="outlined"
                 startIcon={<CancelOutlinedIcon />}
@@ -406,11 +435,25 @@ export default function TransferenciaDetalleDialog({
 
       {/* Confirmaciones */}
       <ConfirmDialog
-        open={confirmAccion === 'confirmar'}
+        open={confirmAccion === 'enviar'}
         onClose={() => setConfirmAccion(null)}
-        onConfirm={() => handleAccion('confirmar')}
-        title="¿Confirmar transferencia?"
-        message={`Se trasladarán ${t?.totalAnimales} animal(es) de ${t?.fincaOrigen?.nombre} a ${t?.fincaDestino?.nombre}. Esta acción cambia la finca de los animales seleccionados.`}
+        onConfirm={() => handleAccion('enviar')}
+        title="¿Enviar transferencia?"
+        message={`Se enviarán ${t?.totalAnimales} animal(es) a ${t?.fincaDestino?.nombre}. Quedará pendiente de recepción hasta que la finca destino la acepte. Los animales NO se mueven todavía.`}
+      />
+      <ConfirmDialog
+        open={confirmAccion === 'enviar_interna'}
+        onClose={() => setConfirmAccion(null)}
+        onConfirm={() => handleAccion('enviar_interna')}
+        title="¿Transferir animales?"
+        message={`Transferencia interna: se trasladarán ${t?.totalAnimales} animal(es) de ${t?.fincaOrigen?.nombre} a ${t?.fincaDestino?.nombre} de inmediato.`}
+      />
+      <ConfirmDialog
+        open={confirmAccion === 'aceptar'}
+        onClose={() => setConfirmAccion(null)}
+        onConfirm={() => handleAccion('aceptar')}
+        title="¿Aceptar transferencia?"
+        message={`Se recibirán ${t?.totalAnimales} animal(es) en ${t?.fincaDestino?.nombre}. Esta acción cambia la finca de los animales.`}
       />
       <ConfirmDialog
         open={confirmAccion === 'cancelar'}
@@ -419,13 +462,28 @@ export default function TransferenciaDetalleDialog({
         title="¿Cancelar transferencia?"
         message="La transferencia será cancelada. Los animales permanecerán en su finca actual."
       />
-      <ConfirmDialog
-        open={confirmAccion === 'recibir'}
-        onClose={() => setConfirmAccion(null)}
-        onConfirm={() => handleAccion('recibir')}
-        title="¿Marcar como recibida?"
-        message="Se confirmará que la finca destino ha recibido los animales."
-      />
+
+      {/* Rechazo con motivo */}
+      <Dialog open={confirmAccion === 'rechazar'} onClose={() => setConfirmAccion(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>¿Rechazar transferencia?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Los animales permanecerán en {t?.fincaOrigen?.nombre}. Indique el motivo (opcional):
+          </Typography>
+          <TextField
+            autoFocus fullWidth multiline minRows={2}
+            label="Motivo del rechazo"
+            value={motivoRechazo}
+            onChange={(e) => setMotivoRechazo(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmAccion(null)}>Cancelar</Button>
+          <Button color="error" variant="contained" onClick={() => handleAccion('rechazar')}>
+            Rechazar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   )
 }

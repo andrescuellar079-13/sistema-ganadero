@@ -1,14 +1,20 @@
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@apollo/client'
 import { useAuth } from '../context/AuthContext'
 import { useLayout } from '../context/LayoutContext'
+import { useFincas } from '../hooks/useFincas'
+import { GET_ALERTAS_PENDIENTES } from '../graphql/alertas'
 import Sidebar from './Sidebar'
 import {
   AppBar, Toolbar, Box, Typography, IconButton,
-  Chip, Avatar, Button, Divider,
+  Chip, Avatar, Button, Divider, Badge,
+  Select, MenuItem, FormControl, Tooltip,
 } from '@mui/material'
 import MenuOpenIcon from '@mui/icons-material/MenuOpen'
 import MenuIcon     from '@mui/icons-material/Menu'
 import LogoutIcon   from '@mui/icons-material/Logout'
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
+import AgricultureIcon from '@mui/icons-material/Agriculture'
 
 const PAGE_TITLES = {
   '/':             'Dashboard',
@@ -39,7 +45,29 @@ export default function Layout({ children }) {
   const location = useLocation()
   const navigate  = useNavigate()
 
+  const { misFincas, fincaActual, setFincaActiva } = useFincas()
+
+  const fincaActivaId =
+    fincaActual?.id || localStorage.getItem('fincaId') || (misFincas[0]?.id ?? '')
+
+  // Conteo de notificaciones pendientes del usuario en la finca activa.
+  const { data: pendData } = useQuery(GET_ALERTAS_PENDIENTES, {
+    variables: { fincaId: fincaActivaId },
+    skip: !fincaActivaId,
+    pollInterval: 60000,
+    fetchPolicy: 'cache-and-network',
+  })
+  const numPendientes = pendData?.alertasPendientes?.length || 0
+
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Sistema Ganadero'
+
+  const handleCambiarFinca = async (e) => {
+    const nuevaId = e.target.value
+    if (String(nuevaId) === String(fincaActivaId)) return
+    await setFincaActiva(nuevaId)
+    // Recargar para refrescar todos los datos de la finca activa.
+    window.location.reload()
+  }
 
   const handleLogout = async () => {
     await logout()
@@ -78,6 +106,38 @@ export default function Layout({ children }) {
             >
               {pageTitle}
             </Typography>
+
+            {/* Selector de finca activa (solo si el usuario tiene más de una finca) */}
+            {misFincas.length > 1 ? (
+              <FormControl size="small" sx={{ mr: 1.5, minWidth: 180, display: { xs: 'none', sm: 'flex' } }}>
+                <Select
+                  value={fincaActivaId || ''}
+                  onChange={handleCambiarFinca}
+                  startAdornment={<AgricultureIcon fontSize="small" sx={{ mr: 0.75, color: 'text.secondary' }} />}
+                  sx={{ fontSize: '0.8125rem', fontWeight: 600 }}
+                >
+                  {misFincas.map(f => (
+                    <MenuItem key={f.id} value={f.id}>{f.nombre}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : misFincas.length === 1 ? (
+              <Chip
+                icon={<AgricultureIcon fontSize="small" />}
+                label={misFincas[0].nombre}
+                size="small"
+                sx={{ mr: 1.5, display: { xs: 'none', sm: 'flex' }, fontWeight: 600 }}
+              />
+            ) : null}
+
+            {/* Campana de notificaciones */}
+            <Tooltip title="Notificaciones">
+              <IconButton size="small" onClick={() => navigate('/alertas')} sx={{ mr: 0.5, color: 'text.secondary' }}>
+                <Badge badgeContent={numPendientes} color="error" max={99}>
+                  <NotificationsNoneIcon fontSize="small" />
+                </Badge>
+              </IconButton>
+            </Tooltip>
 
             {/* Derecha: rol + usuario + logout */}
             {user?.rol?.nombre && (
