@@ -4,10 +4,19 @@ import { useVentas } from '../hooks/useVentas'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import VentaForm from '../components/VentaForm'
-import ReportesVentas from '../components/ReportesVentas'
 import PageHeader from '../components/ui/PageHeader'
 import PageAlert from '../components/ui/PageAlert'
 import EmptyState from '../components/ui/EmptyState'
+
+// Librerías añadidas para exportar reportes descargables
+import * as XLSX from 'xlsx'
+import { jsPDF } from 'jspdf'
+import 'jspdf-autotable'
+
+// Componentes añadidos para el bloque visual interactivo de Recharts
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, CartesianGrid, ResponsiveContainer 
+} from 'recharts'
 
 import {
   Box,
@@ -36,7 +45,6 @@ import {
   DialogContentText,
   DialogActions,
   Button,
-  Badge,
 } from '@mui/material'
 import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined'
 import SearchIcon from '@mui/icons-material/Search'
@@ -52,17 +60,6 @@ const MODALIDAD_LABEL = {
   POR_KILO: 'Por Kilo',
   POR_CABEZA: 'Por Cabeza',
   MIXTO: 'Mixto',
-}
-
-const MOTIVO_DESCARTE_LABEL = {
-  EDAD_AVANZADA: 'Edad avanzada',
-  BAJA_PRODUCCION: 'Baja producción',
-  PROBLEMAS_REPRODUCTIVOS: 'Problemas reproductivos',
-  ENFERMEDAD_CRONICA: 'Enfermedad crónica',
-  LESION_PERMANENTE: 'Lesión permanente',
-  MAL_CARACTER: 'Mal carácter',
-  DECISION_ECONOMICA: 'Decisión económica',
-  OTRO: 'Otro',
 }
 
 export default function VentasPage() {
@@ -92,6 +89,11 @@ export default function VentasPage() {
   const [sortBy, setSortBy] = useState('mas_reciente')
   const [filterModalidad, setFilterModalidad] = useState('todos')
   const [showFilters, setShowFilters] = useState(false)
+
+  // NUEVOS ESTADOS ENLAZADOS AL SUBMÓDULO DE REPORTE INTERACTIVO
+  const [periodoReporte, setPeriodoReporte] = useState('Mes')
+  const [tipoReporte, setTipoReporte] = useState('Monto') // 'Monto' o 'Cabezas'
+  const [subPestanaActiva, setSubPestanaActiva] = useState('grafico') // 'grafico' o 'detalle'
 
   const sortOptions = [
     { value: 'mas_reciente', label: 'Más reciente' },
@@ -201,12 +203,118 @@ export default function VentasPage() {
 
   const ventasFiltradas = [...(notasVenta || [])].filter(filtrarVentas).sort(ordenarVentas)
 
-  // Calcular utilidad total de una venta
   const calcularUtilidadVenta = (venta) => {
     if (!venta?.detalles?.length) return null
     const tieneUtilidad = venta.detalles.some(d => d.costoEstimado > 0)
     if (!tieneUtilidad) return null
     return venta.detalles.reduce((s, d) => s + (parseFloat(d.utilidad) || 0), 0)
+  }
+
+  // ==========================================
+  // LÓGICA Y PROCESAMIENTO INTERNO DEL REPORTE
+  // ==========================================
+  const formatearDinero = (valor) => {
+    return 'Bs. ' + (valor || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  const formatearEjeY = (value) => {
+    if (tipoReporte === 'Monto') {
+      if (value >= 1000000) return `Bs. ${(value / 1000000).toFixed(1)}M`
+      if (value >= 1000) return `Bs. ${(value / 1000).toFixed(1)}K`
+      return `Bs. ${value}`
+    }
+    return `${value} cab`
+  }
+
+  // Generar dinámicamente datos agrupados por periodo métrica seleccionada
+  const agruparDatosPorPeriodo = () => {
+    const mapa = {}
+    let totalFacturado = 0
+    let totalCabezas = 0
+    let totalPrecio = 0
+    let cuentaPrecios = 0
+
+    if (notasVenta && notasVenta.length > 0) {
+      notasVenta.forEach(v => {
+        const fecha = new Date(v.fechaVenta)
+        let clavePeriodo = ''
+
+        if (periodoReporte === 'Mes') {
+          clavePeriodo = fecha.toLocaleString('es-BO', { month: 'short', year: '2-digit' })
+        } else if (periodoReporte === 'Año') {
+          clavePeriodo = fecha.getFullYear().toString()
+        } else if (periodoReporte === 'Semana') {
+          // Obtener número aproximado de semana en el año
+          const primeroEnero = new Date(fecha.getFullYear(), 0, 1);
+          const dias = Math.floor((fecha - primeroEnero) / (24 * 60 * 60 * 1000));
+          const semana = Math.ceil((dias + primeroEnero.getDay() + 1) / 7);
+          clavePeriodo = `Sem ${semana} (${fecha.getFullYear()})`
+        } else {
+          clavePeriodo = fecha.toLocaleDateString('es-BO')
+        }
+
+        const monto = parseFloat(v.montoTotal || 0)
+        totalFacturado += monto
+        const cabezas = v.detalles?.length || 0
+        totalCabezas += cabezas
+
+        v.detalles?.forEach(d => {
+          if (d.precioUnitario) {
+            totalPrecio += parseFloat(d.precioUnitario)
+            cuentaPrecios++
+          }
+        })
+
+        if (!mapa[clavePeriodo]) {
+          mapa[clavePeriodo] = { name: clavePeriodo, monto: 0, cantidad: 0 }
+        }
+        mapa[clavePeriodo].monto += monto
+        mapa[clavePeriodo].cantidad += cabezas
+      })
+    }
+
+    const datosFormateados = Object.values(mapa)
+    const precioPromedio = cuentaPrecios > 0 ? (totalPrecio / cuentaPrecios) : 0
+
+    return {
+      datosPeriodo: datosFormateados,
+      kpis: { totalFacturado, cantidadAnimales: totalCabezas, precioPromedio }
+    }
+  }
+
+  const { datosPeriodo, kpis } = agruparDatosPorPeriodo()
+
+  // Determinar valor máximo dinámico para la barra de distribución proporcional
+  const maximoValor = datosPeriodo.length > 0 
+    ? Math.max(...datosPeriodo.map(d => tipoReporte === 'Monto' ? d.monto : d.cantidad || 1), 1) 
+    : 1
+
+  const exportarExcel = () => {
+    if (datosPeriodo.length === 0) return
+    const datosAExportar = datosPeriodo.map(m => ({
+      'Período / Concepto': m.name,
+      'Monto de Ventas (Bs.)': m.monto,
+      'Cabezas Vendidas': m.cantidad
+    }))
+    const ws = XLSX.utils.json_to_sheet(datosAExportar)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte Ventas")
+    XLSX.writeFile(wb, `Reporte_Ventas_${periodoReporte}_${tipoReporte}.xlsx`)
+  }
+
+  const exportarPDF = () => {
+    if (datosPeriodo.length === 0) return
+    const doc = new jsPDF()
+    doc.setFontSize(18)
+    doc.text(`Reporte Avanzado de Ventas - GanadoSoft`, 14, 22)
+    doc.setFontSize(11)
+    doc.text(`Período: ${periodoReporte} | Métrica: ${tipoReporte}`, 14, 30)
+
+    const columnas = ["Concepto / Período", "Monto Total", "Animales Comercializados"]
+    const filas = datosPeriodo.map(m => [m.name, formatearDinero(m.monto), `${m.cantidad} cabezas`])
+
+    doc.autoTable({ startY: 38, head: [columnas], body: filas })
+    doc.save(`Reporte_Ventas_${periodoReporte}_${tipoReporte}.pdf`)
   }
 
   if (loading) return <LoadingSpinner />
@@ -228,6 +336,7 @@ export default function VentasPage() {
         <Tab label="Reportes y Estadísticas" icon={<AssessmentIcon />} iconPosition="start" />
       </Tabs>
 
+      {/* PESTAÑA O: LISTADO OPERATIVO ORIGINAL */}
       {tabValue === 0 && (
         <>
           {/* Filtros */}
@@ -410,7 +519,174 @@ export default function VentasPage() {
         </>
       )}
 
-      {tabValue === 1 && <ReportesVentas />}
+      {/* PESTAÑA 1: REPORTE AVANZADO CON SELECCIÓN DE TIPO JUNTO A PERIODO */}
+      {tabValue === 1 && (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
+          
+          {/* Fila de Controles: Periodo, Tipo de Reporte y Botones de Descarga */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3 rounded-xl border border-gray-100">
+            <div className="flex flex-wrap items-center gap-4">
+              
+              {/* Selector de Período */}
+              <div className="flex flex-col gap-1 border border-gray-200 rounded-lg px-3 py-1 bg-white min-w-[160px]">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Período de Análisis</label>
+                <select 
+                  value={periodoReporte} 
+                  onChange={(e) => setPeriodoReporte(e.target.value)}
+                  className="text-sm font-semibold bg-transparent text-gray-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="Día">📅 Día</option>
+                  <option value="Semana">📅 Semana</option>
+                  <option value="Mes">📅 Mes</option>
+                  <option value="Año">📅 Año</option>
+                </select>
+              </div>
+
+              {/* NUEVO Selector: Tipo de Reporte */}
+              <div className="flex flex-col gap-1 border border-gray-200 rounded-lg px-3 py-1 bg-white min-w-[180px]">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Tipo de Reporte / Métrica</label>
+                <select 
+                  value={tipoReporte} 
+                  onChange={(e) => setTipoReporte(e.target.value)}
+                  className="text-sm font-semibold bg-transparent text-gray-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="Monto">💰 Monto Total (Bs.)</option>
+                  <option value="Cabezas">🐄 Cantidad de Cabezas</option>
+                </select>
+              </div>
+
+            </div>
+
+            {/* Descargas */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={exportarExcel}
+                className="flex items-center gap-1.5 bg-[#2e7d32] hover:bg-[#1b5e20] text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition-colors uppercase"
+              >
+                📊 Excel
+              </button>
+              <button 
+                onClick={exportarPDF}
+                className="flex items-center gap-1.5 bg-[#c62828] hover:bg-[#b71c1c] text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition-colors uppercase"
+              >
+                📄 PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Micro-tarjetas de Datos Analíticos */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className={`border rounded-xl p-4 transition-all ${tipoReporte === 'Monto' ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-100 bg-gray-50/50'}`}>
+              <span className="text-xs text-gray-400 font-medium block">Total Ingresos por Ventas</span>
+              <span className="text-xl font-bold text-emerald-600 mt-1 block">{formatearDinero(kpis.totalFacturado)}</span>
+            </div>
+            <div className={`border rounded-xl p-4 transition-all ${tipoReporte === 'Cabezas' ? 'border-blue-200 bg-blue-50/20' : 'border-gray-100 bg-gray-50/50'}`}>
+              <span className="text-xs text-gray-400 font-medium block">Animales Comercializados</span>
+              <span className="text-xl font-bold text-gray-700 mt-1 block">{kpis.cantidadAnimales} cabezas</span>
+            </div>
+            <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+              <span className="text-xs text-gray-400 font-medium block">Precio Promedio Unitario</span>
+              <span className="text-xl font-bold text-blue-600 mt-1 block">{formatearDinero(kpis.precioPromedio)}</span>
+            </div>
+          </div>
+
+          {/* Menú de Sub-Pestañas Interactivas */}
+          <div className="border-b border-gray-200">
+            <div className="flex gap-6 -mb-px">
+              <button 
+                onClick={() => setSubPestanaActiva('grafico')}
+                className={`pb-3 font-medium text-sm flex items-center gap-1.5 border-b-2 transition-all ${
+                  subPestanaActiva === 'grafico' 
+                    ? 'border-green-600 text-green-600 font-bold' 
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                📊 Resumen Gráfico
+              </button>
+              <button 
+                onClick={() => setSubPestanaActiva('detalle')}
+                className={`pb-3 font-medium text-sm flex items-center gap-1.5 border-b-2 transition-all ${
+                  subPestanaActiva === 'detalle' 
+                    ? 'border-green-600 text-green-600 font-bold' 
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                📋 Detalle Proporcional
+              </button>
+            </div>
+          </div>
+
+          {/* Renderizado Dinámico según la Subpestaña y Tipo seleccionado */}
+          <div className="pt-2">
+            {subPestanaActiva === 'grafico' ? (
+              <div className="h-64 bg-gray-50/30 p-4 rounded-xl border border-gray-100">
+                {datosPeriodo.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={datosPeriodo}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                      <XAxis dataKey="name" stroke="#9ca3af" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} tickFormatter={formatearEjeY} />
+                      <ChartTooltip 
+                        formatter={(value) => [
+                          tipoReporte === 'Monto' ? formatearDinero(value) : `${value} cabezas`, 
+                          tipoReporte === 'Monto' ? 'Ingresos' : 'Volumen'
+                        ]} 
+                      />
+                      <Bar 
+                        dataKey={tipoReporte === 'Monto' ? 'monto' : 'cantidad'} 
+                        fill={tipoReporte === 'Monto' ? '#10b981' : '#2563eb'} 
+                        radius={[4, 4, 0, 0]} 
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">No hay registros cargados para graficar</div>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-gray-400 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-3 px-4">Concepto / Fecha</th>
+                      <th className="py-3 px-4">{tipoReporte === 'Monto' ? 'Monto Comercializado' : 'Volumen (Cabezas)'}</th>
+                      <th className="py-3 px-4">Distribución Proporcional</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                    {datosPeriodo.length > 0 ? (
+                      datosPeriodo.map((d, index) => {
+                        const valorActual = tipoReporte === 'Monto' ? d.monto : d.cantidad
+                        const porcentajeBarra = Math.min((valorActual / maximoValor) * 100, 100)
+                        return (
+                          <tr key={index} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="py-3.5 px-4 font-medium">{d.name}</td>
+                            <td className="py-3.5 px-4 font-bold text-gray-900">
+                              {tipoReporte === 'Monto' ? formatearDinero(d.monto) : `${d.cantidad} cabezas`}
+                            </td>
+                            <td className="py-3.5 px-4 w-1/2">
+                              <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${tipoReporte === 'Monto' ? 'bg-[#10b981]' : 'bg-[#1565c0]'}`} 
+                                  style={{ width: `${porcentajeBarra}%` }}
+                                ></div>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan="3" className="py-4 text-center text-gray-400">Sin datos de distribución registrados</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Form crear/editar */}
       {showForm && (
@@ -558,7 +834,6 @@ export default function VentasPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {/* Totales */}
                     <TableRow sx={{ bgcolor: '#F8FAFC', fontWeight: 700 }}>
                       <TableCell colSpan={4} align="right">
                         <Typography variant="subtitle2">Totales:</Typography>

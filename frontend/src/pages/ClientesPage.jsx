@@ -9,10 +9,15 @@ import PageAlert from '../components/ui/PageAlert'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
 
+// --- Imports añadidos ---
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
   Typography, IconButton, Tooltip, TextField, InputAdornment,
-  MenuItem, Select, FormControl, InputLabel, Chip, Stack,
+  MenuItem, Select, FormControl, InputLabel, Chip, Stack, Button,
 } from '@mui/material'
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
@@ -20,6 +25,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import SearchIcon from '@mui/icons-material/Search'
 import ClearIcon from '@mui/icons-material/Clear'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined' // Icono añadido
 
 export default function ClientesPage() {
   const { clientes, loading, error, crearCliente, actualizarCliente, eliminarCliente } = useClientes()
@@ -28,11 +34,9 @@ export default function ClientesPage() {
   const [message, setMessage] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   
-  // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
-  // Filtrar clientes
   const clientesFiltrados = useMemo(() => {
     let filtered = [...clientes]
     
@@ -50,6 +54,27 @@ export default function ClientesPage() {
     
     return filtered
   }, [clientes, searchTerm])
+
+  // --- Funciones añadidas ---
+  const exportarExcel = () => {
+    const data = clientesFiltrados.map(c => ({
+      Nombre: c.nombre, Apellidos: c.apellidos, CI: c.ci, Telefono: c.telefono, Email: c.email, Direccion: c.direccion
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Clientes")
+    XLSX.writeFile(wb, "Reporte_Clientes.xlsx")
+  }
+
+  const exportarPDF = () => {
+    const doc = new jsPDF()
+    doc.text("Reporte de Clientes", 14, 15)
+    doc.autoTable({
+      head: [['Nombre', 'Apellidos', 'CI', 'Teléfono', 'Email', 'Dirección']],
+      body: clientesFiltrados.map(c => [c.nombre, c.apellidos, c.ci, c.telefono, c.email, c.direccion]),
+    })
+    doc.save("Reporte_Clientes.pdf")
+  }
 
   const limpiarFiltros = () => {
     setSearchTerm('')
@@ -89,16 +114,22 @@ export default function ClientesPage() {
 
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <PageHeader
-        title="Clientes"
-        icon={PeopleOutlinedIcon}
-        onAdd={openAdd}
-        addLabel="Nuevo Cliente"
-      />
+      {/* Botones de exportación añadidos junto al header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <PageHeader
+          title="Clientes"
+          icon={PeopleOutlinedIcon}
+          onAdd={openAdd}
+          addLabel="Nuevo Cliente"
+        />
+        <Stack direction="row" spacing={1}>
+           <Button startIcon={<FileDownloadOutlinedIcon />} onClick={exportarExcel} size="small" variant="outlined">Excel</Button>
+           <Button startIcon={<FileDownloadOutlinedIcon />} onClick={exportarPDF} size="small" variant="outlined" color="error">PDF</Button>
+        </Stack>
+      </Box>
 
       <PageAlert message={message} onClose={() => setMessage(null)} />
 
-      {/* Barra de búsqueda y filtros */}
       <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
           <TextField
