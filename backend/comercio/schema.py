@@ -4,6 +4,7 @@ from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
 from django.db.models import Sum
 
+from accounts.permissions import ids_fincas_visibles, ids_para_listado, validar_finca
 from .models import (
     Cliente,
     NotaVenta,
@@ -72,49 +73,74 @@ class MuerteBajaType(DjangoObjectType):
 # QUERY
 # ==========================================
 
+def _fincas_scope(info, finca_id):
+    """IDs de fincas a aplicar: la indicada (validada) o la finca activa."""
+    user = info.context.user
+    if finca_id:
+        validar_finca(user, finca_id)
+        return [int(finca_id)]
+    return ids_para_listado(user)
+
+
 class Query(graphene.ObjectType):
-    clientes = graphene.List(ClienteType)
-    notas_venta = graphene.List(NotaVentaType)
-    detalles_venta = graphene.List(DetalleVentaType)
-    muertes_bajas = graphene.List(MuerteBajaType)
-    animales_disponibles = graphene.List("animales.schema.AnimalType")
-    corrales_venta = graphene.List(CorrallVentaType)
+    clientes = graphene.List(ClienteType, finca_id=graphene.ID())
+    notas_venta = graphene.List(NotaVentaType, finca_id=graphene.ID())
+    detalles_venta = graphene.List(DetalleVentaType, finca_id=graphene.ID())
+    muertes_bajas = graphene.List(MuerteBajaType, finca_id=graphene.ID())
+    animales_disponibles = graphene.List("animales.schema.AnimalType", finca_id=graphene.ID())
+    corrales_venta = graphene.List(CorrallVentaType, finca_id=graphene.ID())
     animales_corral = graphene.List(AnimalCorralType, corral_id=graphene.ID())
-    ventas_por_anio = graphene.List(NotaVentaType, anio=graphene.Int(required=True))
+    ventas_por_anio = graphene.List(NotaVentaType, anio=graphene.Int(required=True), finca_id=graphene.ID())
     utilidad_por_venta = graphene.JSONString(nota_venta_id=graphene.ID(required=True))
 
-    def resolve_clientes(self, info):
-        return Cliente.objects.all()
+    @login_required
+    def resolve_clientes(self, info, finca_id=None):
+        return Cliente.objects.filter(finca_id__in=_fincas_scope(info, finca_id))
 
-    def resolve_notas_venta(self, info):
-        return NotaVenta.objects.all()
+    @login_required
+    def resolve_notas_venta(self, info, finca_id=None):
+        return NotaVenta.objects.filter(finca_id__in=_fincas_scope(info, finca_id))
 
-    def resolve_detalles_venta(self, info):
-        return DetalleVenta.objects.all()
+    @login_required
+    def resolve_detalles_venta(self, info, finca_id=None):
+        return DetalleVenta.objects.filter(nota_venta__finca_id__in=_fincas_scope(info, finca_id))
 
-    def resolve_muertes_bajas(self, info):
-        return MuerteBaja.objects.all()
+    @login_required
+    def resolve_muertes_bajas(self, info, finca_id=None):
+        return MuerteBaja.objects.filter(finca_id__in=_fincas_scope(info, finca_id))
 
-    def resolve_animales_disponibles(self, info):
+    @login_required
+    def resolve_animales_disponibles(self, info, finca_id=None):
         from animales.models import Animal
-        return Animal.objects.filter(estado='ACTIVO').select_related('raza')
+        return Animal.objects.filter(
+            estado='ACTIVO', finca_id__in=_fincas_scope(info, finca_id)
+        ).select_related('raza')
 
-    def resolve_corrales_venta(self, info):
-        return CorrallVenta.objects.all()
+    @login_required
+    def resolve_corrales_venta(self, info, finca_id=None):
+        return CorrallVenta.objects.filter(finca_id__in=_fincas_scope(info, finca_id))
 
+    @login_required
     def resolve_animales_corral(self, info, corral_id=None):
-        qs = AnimalCorral.objects.select_related('animal')
+        qs = AnimalCorral.objects.select_related('animal').filter(
+            corral__finca_id__in=ids_fincas_visibles(info.context.user)
+        )
         if corral_id:
             qs = qs.filter(corral_id=corral_id)
         return qs
 
-    def resolve_ventas_por_anio(self, info, anio):
-        return NotaVenta.objects.filter(fecha_venta__year=anio)
+    @login_required
+    def resolve_ventas_por_anio(self, info, anio, finca_id=None):
+        return NotaVenta.objects.filter(
+            fecha_venta__year=anio, finca_id__in=_fincas_scope(info, finca_id)
+        )
 
+    @login_required
     def resolve_utilidad_por_venta(self, info, nota_venta_id):
         import json
         try:
             nota = NotaVenta.objects.get(id=nota_venta_id)
+            validar_finca(info.context.user, nota.finca_id)
             detalles = nota.detalles.select_related('animal').all()
             resultado = {
                 "venta_id": nota_venta_id,
@@ -161,8 +187,7 @@ class CrearCliente(graphene.Mutation):
     @login_required
     def mutate(self, info, finca_id, nombre, **kwargs):
         try:
-            from fincas.models import Finca
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             cliente = Cliente.objects.create(finca=finca, nombre=nombre, **kwargs)
             return CrearCliente(cliente=cliente, success=True, message=f"Cliente {nombre} creado exitosamente")
         except Exception as e:
@@ -232,8 +257,7 @@ class CrearCorralVenta(graphene.Mutation):
     @login_required
     def mutate(self, info, finca_id, nombre, fecha_formacion, **kwargs):
         try:
-            from fincas.models import Finca
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             corral = CorrallVenta.objects.create(
                 finca=finca, nombre=nombre, fecha_formacion=fecha_formacion,
                 descripcion=kwargs.get('descripcion')
@@ -311,8 +335,7 @@ class CrearNotaVenta(graphene.Mutation):
     @login_required
     def mutate(self, info, finca_id, fecha_venta, **kwargs):
         try:
-            from fincas.models import Finca
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             cliente = Cliente.objects.filter(id=kwargs.get('cliente_id')).first() if kwargs.get('cliente_id') else None
             corral = CorrallVenta.objects.filter(id=kwargs.get('corral_id')).first() if kwargs.get('corral_id') else None
             nota_venta = NotaVenta.objects.create(
@@ -461,10 +484,9 @@ class CrearMuerteBaja(graphene.Mutation):
     @login_required
     def mutate(self, info, finca_id, animal_id, fecha_baja, causa, tipo, **kwargs):
         try:
-            from fincas.models import Finca
             from animales.models import Animal
 
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             animal = Animal.objects.get(id=animal_id)
 
             tipos_validos = ['MUERTE', 'ROBO', 'PERDIDA', 'DESCARTE', 'SACRIFICIO', 'OTRO']

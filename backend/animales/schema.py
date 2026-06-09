@@ -5,6 +5,8 @@ from graphql_jwt.decorators import login_required
 from datetime import date
 
 from .models import Raza, CategoriaAnimal, Animal, Parcela, AnimalParcela, MovimientoAnimal
+from accounts.permissions import ids_fincas_visibles, ids_para_listado, validar_finca, puede_acceder_finca
+from graphql import GraphQLError
 
 
 def _get_registro_peso_type():
@@ -543,19 +545,35 @@ class Query(graphene.ObjectType):
     def resolve_categorias_animales(self, info):
         return CategoriaAnimal.objects.all()
 
+    @login_required
     def resolve_all_animales(self, info):
-        return Animal.objects.all()
+        return Animal.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
+    @login_required
     def resolve_animal_by_id(self, info, id):
-        return Animal.objects.get(id=id)
+        animal = Animal.objects.filter(id=id).first()
+        if animal and not puede_acceder_finca(info.context.user, animal.finca_id):
+            raise GraphQLError("No tiene acceso a este animal.")
+        return animal
 
+    @login_required
     def resolve_animal_by_arete(self, info, nro_arete):
-        return Animal.objects.get(nro_arete=nro_arete)
+        animal = Animal.objects.filter(
+            nro_arete=nro_arete, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).first()
+        return animal
 
+    @login_required
     def resolve_animales_activos(self, info, finca_id):
+        validar_finca(info.context.user, finca_id)
         return Animal.objects.filter(finca_id=finca_id, estado='ACTIVO')
 
+    @login_required
     def resolve_animal_detalle(self, info, id):
+        if not Animal.objects.filter(
+            id=id, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).exists():
+            raise GraphQLError("No tiene acceso a este animal.")
         return Animal.objects.select_related(
             'raza', 'categoria',
             'padre', 'padre__raza', 'padre__categoria',
@@ -590,7 +608,9 @@ class Query(graphene.ObjectType):
             'transferencias_detalle__parcela_destino',
         ).get(id=id)
 
+    @login_required
     def resolve_animales_machos_para_padre(self, info, finca_id, excluir_id=None):
+        validar_finca(info.context.user, finca_id)
         qs = Animal.objects.filter(
             finca_id=finca_id, sexo='MACHO'
         ).select_related('raza', 'categoria')
@@ -598,7 +618,9 @@ class Query(graphene.ObjectType):
             qs = qs.exclude(id=excluir_id)
         return qs.order_by('nro_arete')
 
+    @login_required
     def resolve_animales_hembras_para_madre(self, info, finca_id, excluir_id=None):
+        validar_finca(info.context.user, finca_id)
         qs = Animal.objects.filter(
             finca_id=finca_id, sexo='HEMBRA'
         ).select_related('raza', 'categoria')
@@ -619,7 +641,14 @@ class Query(graphene.ObjectType):
     ):
         from django.db.models import IntegerField, Value, Case, When
 
-        qs = Animal.objects.select_related('finca', 'raza', 'categoria', 'padre', 'madre')
+        user = info.context.user
+        if finca_id:
+            validar_finca(user, finca_id)
+            qs = Animal.objects.select_related('finca', 'raza', 'categoria', 'padre', 'madre')
+        else:
+            qs = Animal.objects.filter(
+                finca_id__in=ids_fincas_visibles(user)
+            ).select_related('finca', 'raza', 'categoria', 'padre', 'madre')
 
         qs = aplicar_filtros_animales(
             qs,
@@ -685,13 +714,24 @@ class Query(graphene.ObjectType):
             tiene_anterior=pagina > 1,
         )
 
+    @login_required
     def resolve_parcelas(self, info, finca_id):
+        validar_finca(info.context.user, finca_id)
         return Parcela.objects.filter(finca_id=finca_id)
 
+    @login_required
     def resolve_parcela(self, info, id):
-        return Parcela.objects.get(id=id)
+        parcela = Parcela.objects.filter(id=id).first()
+        if parcela and not puede_acceder_finca(info.context.user, parcela.finca_id):
+            raise GraphQLError("No tiene acceso a esta parcela.")
+        return parcela
 
+    @login_required
     def resolve_animales_en_parcela(self, info, parcela_id):
+        if not Parcela.objects.filter(
+            id=parcela_id, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).exists():
+            raise GraphQLError("No tiene acceso a esta parcela.")
         return AnimalParcela.objects.filter(parcela_id=parcela_id)
 
     def resolve_animales_actuales_parcela(self, info, parcela_id):
@@ -699,6 +739,7 @@ class Query(graphene.ObjectType):
             parcela_id=parcela_id, fecha_salida__isnull=True
         )
 
+    @login_required
     def resolve_parcelas_paginadas(
         self, info,
         finca_id,
@@ -709,6 +750,7 @@ class Query(graphene.ObjectType):
         page=1,
         page_size=10,
     ):
+        validar_finca(info.context.user, finca_id)
         from django.db.models import Count, Q, OuterRef, Subquery, IntegerField, Value
         from django.db.models.functions import Coalesce
 
@@ -760,7 +802,9 @@ class Query(graphene.ObjectType):
             has_previous=page > 1,
         )
 
+    @login_required
     def resolve_parcelas_disponibles_para_movimiento(self, info, finca_id, animal_id):
+        validar_finca(info.context.user, finca_id)
         from django.db.models import Count, Q, OuterRef, Subquery, IntegerField, Value, F
         from django.db.models.functions import Coalesce
 
@@ -791,7 +835,12 @@ class Query(graphene.ObjectType):
 
         return qs.order_by('nombre')
 
+    @login_required
     def resolve_movimientos_animal(self, info, animal_id, limit=50):
+        if not Animal.objects.filter(
+            id=animal_id, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).exists():
+            raise GraphQLError("No tiene acceso a este animal.")
         qs = MovimientoAnimal.objects.filter(
             animal_id=animal_id
         ).select_related(
@@ -801,10 +850,12 @@ class Query(graphene.ObjectType):
             qs = qs[:limit]
         return qs
 
+    @login_required
     def resolve_movimientos_finca(
         self, info, finca_id,
         animal_id=None, desde=None, hasta=None, motivo=None,
     ):
+        validar_finca(info.context.user, finca_id)
         qs = MovimientoAnimal.objects.filter(
             finca_id=finca_id
         ).select_related(
@@ -820,12 +871,15 @@ class Query(graphene.ObjectType):
             qs = qs.filter(motivo=motivo)
         return qs.order_by('-fecha_movimiento', '-fecha_registro')
 
+    @login_required
     def resolve_reporte_animal_individual(self, info, id):
         from datetime import date as hoy_date
 
         animal = Animal.objects.select_related(
             'raza', 'categoria', 'padre', 'madre'
         ).get(id=id)
+        if not puede_acceder_finca(info.context.user, animal.finca_id):
+            raise GraphQLError("No tiene acceso a este animal.")
 
         movimiento_actual = AnimalParcela.objects.filter(
             animal=animal,
@@ -866,6 +920,7 @@ class Query(graphene.ObjectType):
             descripcion=descripcion,
         )
 
+    @login_required
     def resolve_reporte_animales_grupal(
         self, info,
         finca_id,
@@ -885,6 +940,7 @@ class Query(graphene.ObjectType):
         fecha_registro_desde=None,
         fecha_registro_hasta=None,
     ):
+        validar_finca(info.context.user, finca_id)
         from django.db.models import Count, Avg, Sum, Min, Max
         from decimal import Decimal
 
@@ -990,6 +1046,7 @@ class Query(graphene.ObjectType):
             descripcion=descripcion,
         )
 
+    @login_required
     def resolve_exportar_animales(
         self, info,
         finca_id,
@@ -1012,6 +1069,7 @@ class Query(graphene.ObjectType):
         limite=None,
         orden=None,
     ):
+        validar_finca(info.context.user, finca_id)
         from datetime import date as hoy_date
         from comercio.models import DetalleVenta, MuerteBaja
 

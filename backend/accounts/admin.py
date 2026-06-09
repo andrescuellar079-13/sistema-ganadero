@@ -1,10 +1,18 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Group
-from .models import Usuario, Rol
+from .models import Usuario, Rol, UsuarioFinca
 
 # Deshabilitar Groups (no lo necesitamos, usamos roles personalizados)
 admin.site.unregister(Group)
+
+
+@admin.register(UsuarioFinca)
+class UsuarioFincaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'usuario', 'finca', 'rol_en_finca', 'activo', 'fecha_asignacion')
+    list_filter = ('rol_en_finca', 'activo', 'finca')
+    search_fields = ('usuario__username', 'finca__nombre')
+    autocomplete_fields = ('usuario', 'finca')
 
 
 # ==========================================

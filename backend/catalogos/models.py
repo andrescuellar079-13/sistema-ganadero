@@ -333,15 +333,15 @@ class Vacuna(models.Model):
         ('ORAL', 'Oral'),
     ]
     SEXO_APLICABLE_CHOICES = [
-        ("MACHO", "Macho"),
-        ("HEMBRA", "Hembra"),
-        ("AMBOS", "Ambos"),
+        ('MACHO', 'Macho'),
+        ('HEMBRA', 'Hembra'),
+        ('AMBOS', 'Ambos'),
     ]
     TIPO_PRODUCCION_CHOICES = [
-        ("CARNE", "Carne"),
-        ("LECHE", "Leche"),
-        ("DOBLE_PROPOSITO", "Doble propósito"),
-        ("TODOS", "Todos"),
+        ('CARNE', 'Carne'),
+        ('LECHE', 'Leche'),
+        ('DOBLE_PROPOSITO', 'Doble propósito'),
+        ('TODOS', 'Todos'),
     ]
 
     finca = models.ForeignKey(
@@ -359,16 +359,8 @@ class Vacuna(models.Model):
     edad_minima_meses = models.IntegerField(default=0, help_text="Edad mínima en meses para aplicar")
     requiere_refuerzo = models.BooleanField(default=False, help_text="Requiere dosis de refuerzo")
     dias_anticipacion_alerta = models.IntegerField(default=30, help_text="Días de anticipación para generar alertas")
-    sexo_aplicable = models.CharField(
-        max_length=10,
-        choices=SEXO_APLICABLE_CHOICES,
-        default="AMBOS"
-    )
-    tipo_produccion_aplicable = models.CharField(
-        max_length=20,
-        choices=TIPO_PRODUCCION_CHOICES,
-        default="TODOS"
-    )
+    sexo_aplicable = models.CharField(max_length=10, choices=SEXO_APLICABLE_CHOICES, default='AMBOS')
+    tipo_produccion_aplicable = models.CharField(max_length=20, choices=TIPO_PRODUCCION_CHOICES, default='TODOS')
     stock_cantidad = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     stock_minimo = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     lote = models.CharField(max_length=100, blank=True, null=True)
@@ -388,30 +380,11 @@ class Vacuna(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.dosis_recomendada})"
 
-    def clean(self):
-        from django.core.exceptions import ValidationError
-        errores = {}
-        if self.stock_cantidad is not None and float(self.stock_cantidad) < 0:
-            errores['stock_cantidad'] = "El stock no puede ser negativo"
-        if self.stock_minimo is not None and float(self.stock_minimo) < 0:
-            errores['stock_minimo'] = "El stock mínimo no puede ser negativo"
-        if self.intervalo_dias is not None and self.intervalo_dias < 0:
-            errores['intervalo_dias'] = "El intervalo no puede ser negativo"
-        if self.edad_minima_meses is not None and self.edad_minima_meses < 0:
-            errores['edad_minima_meses'] = "La edad mínima no puede ser negativa"
-        if self.dias_anticipacion_alerta is not None and self.dias_anticipacion_alerta < 0:
-            errores['dias_anticipacion_alerta'] = "Los días de anticipación no pueden ser negativos"
-        if self.nombre:
-            duplicada = Vacuna.objects.filter(
-                finca=self.finca, nombre__iexact=self.nombre.strip()
-            ).exclude(pk=self.pk)
-            if duplicada.exists():
-                errores['nombre'] = "Ya existe una vacuna con este nombre en la finca"
-        if errores:
-            raise ValidationError(errores)
+    def get_info(self):
+        return f"{self.nombre} - Dosis: {self.dosis_recomendada} - Vía: {self.get_via_aplicacion_display()}"
 
     def is_stock_bajo(self):
-        if float(self.stock_minimo or 0) <= 0:
+        if not self.stock_minimo or float(self.stock_minimo) <= 0:
             return False
         return float(self.stock_cantidad or 0) <= float(self.stock_minimo)
 
@@ -420,6 +393,3 @@ class Vacuna(models.Model):
             return False
         from django.utils import timezone
         return self.fecha_vencimiento < timezone.now().date()
-
-    def get_info(self):
-        return f"{self.nombre} - Dosis: {self.dosis_recomendada} - Vía: {self.get_via_aplicacion_display()}"

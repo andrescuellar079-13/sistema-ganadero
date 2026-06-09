@@ -144,7 +144,14 @@ AUTH_USER_MODEL = "accounts.Usuario"
 # ---------------------------------------------------------------------------
 GRAPHENE = {
     "SCHEMA": "config.schema.schema",
+    # OJO: graphql-core ejecuta el ÚLTIMO middleware de la lista primero
+    # (el reduce de MiddlewareManager lo deja como envoltura más externa).
+    # Por eso JSONWebTokenMiddleware debe ir AL FINAL: así autentica y deja
+    # info.context.user listo ANTES de que FincaScopeMiddleware valide el
+    # acceso. Si se invierte, FincaScope ve un AnonymousUser y responde
+    # "No autenticado." en cualquier query con finca_id (rompe el dashboard).
     "MIDDLEWARE": [
+        "accounts.graphql_middleware.FincaScopeMiddleware",
         "graphql_jwt.middleware.JSONWebTokenMiddleware",
     ],
 }

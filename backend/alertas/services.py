@@ -234,11 +234,11 @@ def generar_alertas_automaticas(finca_id):
         ):
             conteos["animales_listos_venta"] += 1
 
-    # ---- Transferencias pendientes (fincas): confirmadas no recibidas ----
+    # ---- Transferencias pendientes (fincas): enviadas no recibidas ----
     from django.db.models import Q
     transferencias = TransferenciaFinca.objects.filter(
         Q(finca_origen_id=finca_id) | Q(finca_destino_id=finca_id),
-        estado="CONFIRMADA",
+        estado="PENDIENTE_RECEPCION",
     ).select_related("finca_origen", "finca_destino")
     for t in transferencias:
         if _crear_si_no_existe(
@@ -256,3 +256,99 @@ def generar_alertas_automaticas(finca_id):
 
     conteos["total"] = sum(conteos.values())
     return conteos
+
+
+# ===========================================================================
+# Notificaciones de transferencias entre fincas (dirigidas por usuario destino)
+# ===========================================================================
+
+def notificar_transferencia(transferencia, tipo="PENDIENTE"):
+    """
+    Crea notificaciones (Alerta) dirigidas a los usuarios de la finca implicada.
+
+    - tipo="PENDIENTE":  notifica a los usuarios de la finca DESTINO.
+    - tipo="RECIBIDA":   notifica a los usuarios de la finca ORIGEN (confirmación).
+    - tipo="RECHAZADA":  notifica a los usuarios de la finca ORIGEN (rechazo).
+
+    Idempotente por (transferencia, usuario, tipo): no duplica si ya existe una
+    alerta PENDIENTE para ese usuario y transferencia.
+    """
+    from accounts.permissions import usuarios_de_finca
+
+    t = transferencia
+    hoy = timezone.now().date()
+    n = t.detalles.count()
+
+    if tipo == "PENDIENTE":
+        finca_objetivo = t.finca_destino
+        finca_notif_id = t.finca_destino_id
+        tipo_alerta = "TRANSFERENCIA_PENDIENTE"
+        prioridad = "ALTA"
+        mensaje = (
+            f"Tiene una transferencia pendiente desde {t.finca_origen.nombre} "
+            f"con {n} animal(es)."
+        )
+        accion = "Revisar y aceptar o rechazar la transferencia."
+    elif tipo == "RECIBIDA":
+        finca_objetivo = t.finca_origen
+        finca_notif_id = t.finca_origen_id
+        tipo_alerta = "TRANSFERENCIA_RECIBIDA"
+        prioridad = "MEDIA"
+        mensaje = (
+            f"{t.finca_destino.nombre} recibió la transferencia de {n} animal(es)."
+        )
+        accion = None
+    elif tipo == "RECHAZADA":
+        finca_objetivo = t.finca_origen
+        finca_notif_id = t.finca_origen_id
+        tipo_alerta = "TRANSFERENCIA_RECIBIDA"
+        prioridad = "ALTA"
+        motivo = f" Motivo: {t.motivo_rechazo}." if t.motivo_rechazo else ""
+        mensaje = (
+            f"{t.finca_destino.nombre} rechazó la transferencia de {n} animal(es)."
+            f"{motivo}"
+        )
+        accion = "Los animales permanecen en la finca origen."
+    else:
+        return 0
+
+    creadas = 0
+    for usuario in usuarios_de_finca(finca_notif_id):
+        existe = Alerta.objects.filter(
+            referencia_tipo="TransferenciaFinca",
+            referencia_id=t.id,
+            asignado_a=usuario,
+            tipo=tipo_alerta,
+            estado="PENDIENTE",
+        ).exists()
+        if existe:
+            continue
+        Alerta.objects.create(
+            finca=finca_objetivo,
+            tipo=tipo_alerta,
+            mensaje=mensaje,
+            fecha_alerta=hoy,
+            referencia_tipo="TransferenciaFinca",
+            referencia_id=t.id,
+            prioridad=prioridad,
+            modulo_origen="FINCAS",
+            asignado_a=usuario,
+            accion_recomendada=accion,
+        )
+        creadas += 1
+    return creadas
+
+
+def resolver_alertas_transferencia(transferencia, usuario=None):
+    """
+    Marca como RESUELTAS las alertas PENDIENTES asociadas a una transferencia
+    (al aceptarla, rechazarla o cancelarla), para que dejen de aparecer.
+    """
+    pendientes = Alerta.objects.filter(
+        referencia_tipo="TransferenciaFinca",
+        referencia_id=transferencia.id,
+        estado__in=["PENDIENTE", "LEIDA", "EN_PROCESO"],
+    )
+    for alerta in pendientes:
+        alerta.resolver(usuario=usuario)
+    return pendientes.count()

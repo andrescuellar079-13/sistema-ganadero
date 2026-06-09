@@ -106,7 +106,8 @@ class Query(graphene.ObjectType):
     
     produccion_leche_por_anio = graphene.List(
         ProduccionLecheType,
-        anio=graphene.Int(required=True)
+        anio=graphene.Int(required=True),
+        finca_id=graphene.ID(),
     )
     
     produccion_total_hoy = graphene.Decimal(finca_id=graphene.ID(required=True))
@@ -154,11 +155,19 @@ class Query(graphene.ObjectType):
     def resolve_alimentaciones_animales(self, info, finca_id):
         return AlimentoAnimal.objects.filter(finca_id=finca_id)
 
+    @login_required
     def resolve_produccion_leche_por_animal(self, info, animal_id):
-        return ProduccionLeche.objects.filter(vaca_id=animal_id)
+        from accounts.permissions import ids_fincas_visibles
+        return ProduccionLeche.objects.filter(
+            vaca_id=animal_id, finca_id__in=ids_fincas_visibles(info.context.user)
+        )
 
-    def resolve_produccion_leche_por_anio(self, info, anio):
-        return ProduccionLeche.objects.filter(fecha__year=anio)
+    @login_required
+    def resolve_produccion_leche_por_anio(self, info, anio, finca_id=None):
+        from accounts.permissions import scope_ids
+        return ProduccionLeche.objects.filter(
+            fecha__year=anio, finca_id__in=scope_ids(info.context.user, finca_id)
+        )
     
     def resolve_produccion_total_hoy(self, info, finca_id):
         total = ProduccionLeche.objects.filter(

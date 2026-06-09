@@ -5,7 +5,8 @@ from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
 from django.contrib.auth.hashers import make_password
 
-from .models import Usuario, Rol
+from .models import Usuario, Rol, UsuarioFinca
+from .permissions import fincas_visibles, validar_finca
 
 
 # ==========================================
@@ -105,19 +106,42 @@ class RolType(DjangoObjectType):
         return []
 
 
+class UsuarioFincaType(DjangoObjectType):
+    rol_en_finca_display = graphene.String()
+    puede_administrar = graphene.Boolean()
+
+    class Meta:
+        model = UsuarioFinca
+        fields = ("id", "usuario", "finca", "rol_en_finca", "activo", "fecha_asignacion")
+
+    def resolve_rol_en_finca_display(self, info):
+        return self.get_rol_en_finca_display()
+
+    def resolve_puede_administrar(self, info):
+        return self.puede_administrar
+
+
 class UsuarioType(DjangoObjectType):
     nombre_completo = graphene.String()
     tienePermiso = graphene.Boolean(permiso=graphene.String(required=True))
-    
+    es_superadmin = graphene.Boolean()
+    accesos_finca = graphene.List(UsuarioFincaType)
+
     class Meta:
         model = Usuario
         fields = ("id", "username", "email", "first_name", "last_name", "rol", "is_active", "telefono", "finca")
-    
+
     def resolve_nombre_completo(self, info):
         return f"{self.first_name} {self.last_name}".strip() or self.username
-    
+
     def resolve_tienePermiso(self, info, permiso):
         return self.tiene_permiso(permiso)
+
+    def resolve_es_superadmin(self, info):
+        return self.es_superadmin
+
+    def resolve_accesos_finca(self, info):
+        return self.accesos_finca.filter(activo=True).select_related("finca")
 
 
 # ==========================================
@@ -132,7 +156,10 @@ class Query(graphene.ObjectType):
     usuario_por_id = graphene.Field(UsuarioType, id=graphene.ID(required=True))
     usuario_por_username = graphene.Field(UsuarioType, username=graphene.String(required=True))
     mi_usuario = graphene.Field(UsuarioType)
-    
+
+    # Fincas accesibles por el usuario actual (para el selector de finca activa)
+    mis_fincas = graphene.List('fincas.schema.FincaType')
+
     # Permisos
     permisos_sistema = graphene.List(graphene.String)
     permisos_sistema_dict = graphene.JSONString()
@@ -176,7 +203,11 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_mi_usuario(self, info):
         return info.context.user
-    
+
+    @login_required
+    def resolve_mis_fincas(self, info):
+        return fincas_visibles(info.context.user).order_by('nombre')
+
     @login_required
     def resolve_permisos_sistema(self, info):
         return list(PERMISOS_SISTEMA.keys())
@@ -325,33 +356,34 @@ class CrearUsuarioMutation(graphene.Mutation):
         last_name = graphene.String()
         rol_id = graphene.ID()
         finca_id = graphene.ID()
+        fincas_ids = graphene.List(graphene.ID)
         telefono = graphene.String()
         is_active = graphene.Boolean()
-    
+
     usuario = graphene.Field(UsuarioType)
     success = graphene.Boolean()
     message = graphene.String()
-    
+
     @login_required
-    def mutate(self, info, username, password, email=None, first_name=None, last_name=None, rol_id=None, finca_id=None, telefono=None, is_active=True):
+    def mutate(self, info, username, password, email=None, first_name=None, last_name=None, rol_id=None, finca_id=None, fincas_ids=None, telefono=None, is_active=True):
         try:
             from fincas.models import Finca
-            
+
             if Usuario.objects.filter(username=username).exists():
                 return CrearUsuarioMutation(
                     success=False,
                     message=f"El usuario '{username}' ya existe",
                     usuario=None
                 )
-            
+
             finca = None
             if finca_id:
                 finca = Finca.objects.filter(id=finca_id).first()
-            
+
             rol = None
             if rol_id:
                 rol = Rol.objects.filter(id=rol_id).first()
-            
+
             usuario = Usuario.objects.create(
                 username=username,
                 email=email or "",
@@ -363,7 +395,21 @@ class CrearUsuarioMutation(graphene.Mutation):
                 rol=rol,
                 telefono=telefono or ""
             )
-            
+
+            # Accesos finca (multi-tenant). Si no se pasan, usar finca activa.
+            ids = list(fincas_ids or [])
+            if not ids and finca_id:
+                ids = [finca_id]
+            for fid in ids:
+                if Finca.objects.filter(id=fid).exists():
+                    UsuarioFinca.objects.get_or_create(
+                        usuario=usuario, finca_id=fid,
+                        defaults={"rol_en_finca": "ENCARGADO", "activo": True},
+                    )
+            if not usuario.finca_id and ids:
+                usuario.finca_id = ids[0]
+                usuario.save(update_fields=["finca"])
+
             return CrearUsuarioMutation(
                 success=True,
                 message=f"Usuario {username} creado exitosamente",
@@ -507,6 +553,94 @@ class AsignarRolAUsuarioMutation(graphene.Mutation):
             )
 
 
+class AsignarUsuarioFinca(graphene.Mutation):
+    class Arguments:
+        usuario_id = graphene.ID(required=True)
+        finca_id = graphene.ID(required=True)
+        rol_en_finca = graphene.String()
+        activo = graphene.Boolean()
+
+    acceso = graphene.Field(UsuarioFincaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, usuario_id, finca_id, rol_en_finca=None, activo=True):
+        try:
+            from fincas.models import Finca
+            usuario = Usuario.objects.get(id=usuario_id)
+            finca = Finca.objects.get(id=finca_id)
+            acceso, creado = UsuarioFinca.objects.update_or_create(
+                usuario=usuario,
+                finca=finca,
+                defaults={
+                    "rol_en_finca": rol_en_finca or "ENCARGADO",
+                    "activo": activo if activo is not None else True,
+                },
+            )
+            # Si el usuario no tiene finca activa, asignarle ésta.
+            if not usuario.finca_id:
+                usuario.finca = finca
+                usuario.save(update_fields=["finca"])
+            return AsignarUsuarioFinca(
+                acceso=acceso, success=True,
+                message="Acceso asignado." if creado else "Acceso actualizado.",
+            )
+        except Usuario.DoesNotExist:
+            return AsignarUsuarioFinca(acceso=None, success=False, message="Usuario no encontrado.")
+        except Exception as e:
+            return AsignarUsuarioFinca(acceso=None, success=False, message=str(e))
+
+
+class RevocarUsuarioFinca(graphene.Mutation):
+    class Arguments:
+        usuario_id = graphene.ID(required=True)
+        finca_id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, usuario_id, finca_id):
+        try:
+            acceso = UsuarioFinca.objects.filter(
+                usuario_id=usuario_id, finca_id=finca_id
+            ).first()
+            if not acceso:
+                return RevocarUsuarioFinca(success=False, message="Acceso no encontrado.")
+            acceso.activo = False
+            acceso.save(update_fields=["activo"])
+            # Si era su finca activa, limpiar el puntero.
+            usuario = acceso.usuario
+            if usuario.finca_id and int(usuario.finca_id) == int(finca_id):
+                otra = usuario.accesos_finca.filter(activo=True).exclude(finca_id=finca_id).first()
+                usuario.finca = otra.finca if otra else None
+                usuario.save(update_fields=["finca"])
+            return RevocarUsuarioFinca(success=True, message="Acceso revocado.")
+        except Exception as e:
+            return RevocarUsuarioFinca(success=False, message=str(e))
+
+
+class SeleccionarFincaActiva(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+
+    usuario = graphene.Field(UsuarioType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id):
+        user = info.context.user
+        try:
+            finca = validar_finca(user, finca_id)  # lanza si no tiene acceso
+            user.finca = finca
+            user.save(update_fields=["finca"])
+            return SeleccionarFincaActiva(usuario=user, success=True, message=f"Finca activa: {finca.nombre}")
+        except Exception as e:
+            return SeleccionarFincaActiva(usuario=None, success=False, message=str(e))
+
+
 class LogoutMutation(graphene.Mutation):
     success = graphene.Boolean()
 
@@ -570,3 +704,8 @@ class Mutation(graphene.ObjectType):
     eliminarUsuario = EliminarUsuarioMutation.Field()
     asignarRolAUsuario = AsignarRolAUsuarioMutation.Field()
     cambiarPassword = CambiarPasswordMutation.Field()
+
+    # Multi-tenant (accesos usuario-finca / finca activa)
+    asignarUsuarioFinca = AsignarUsuarioFinca.Field()
+    revocarUsuarioFinca = RevocarUsuarioFinca.Field()
+    seleccionarFincaActiva = SeleccionarFincaActiva.Field()
