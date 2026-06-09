@@ -143,8 +143,22 @@ class CrearRegistroPeso(graphene.Mutation):
             from fincas.models import Finca
             from animales.models import Animal
 
+            # --- Validaciones básicas (Fase 1) ---
+            if peso_kg is None or peso_kg < 0:
+                return CrearRegistroPeso(
+                    registro=None, success=False,
+                    message="El peso no puede ser negativo"
+                )
+
             finca = Finca.objects.get(id=finca_id)
             animal = Animal.objects.get(id=animal_id)
+
+            estados_no_validos = ("VENDIDO", "MUERTO", "BAJA", "MATADERO", "DESCARTE")
+            if animal.estado in estados_no_validos:
+                return CrearRegistroPeso(
+                    registro=None, success=False,
+                    message=f"No se puede registrar peso a un animal en estado {animal.get_estado_display()}"
+                )
 
             registro = RegistroPeso.objects.create(
                 finca=finca,

@@ -111,6 +111,33 @@ export const GET_REGISTROS_PESO = gql`
   }
 `
 
+// Animales activos para el módulo de producción (leche / carne / engorde)
+export const GET_ANIMALES_PRODUCCION = gql`
+  query GetAnimalesProduccion($fincaId: ID!) {
+    animalesActivos(fincaId: $fincaId) {
+      id
+      nroArete
+      nombre
+      sexo
+      estado
+      peso
+      tipoProduccion
+      raza {
+        id
+        nombre
+      }
+      categoria {
+        id
+        nombre
+      }
+      registrosPeso {
+        id
+        fechaPesaje
+      }
+    }
+  }
+`
+
 export const GET_PRODUCCION_TOTAL_HOY = gql`
   query GetProduccionTotalHoy($fincaId: ID!) {
     produccionTotalHoy(fincaId: $fincaId)

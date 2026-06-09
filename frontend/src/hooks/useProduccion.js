@@ -7,6 +7,7 @@ import {
   GET_PRODUCCIONES_HOY,
   GET_REGISTROS_PESO,
   GET_PRODUCCION_TOTAL_HOY,
+  GET_ANIMALES_PRODUCCION,
   GET_TOP_5_VACAS_PRODUCCION,  // 👈 Corregido: GET_TOP_5_VACAS_PRODUCCION
   CREATE_LACTANCIA,
   SECAR_LACTANCIA,
@@ -39,6 +40,10 @@ export const useProduccion = () => {
   })
   
   const { data: top5Vacas } = useQuery(GET_TOP_5_VACAS_PRODUCCION, {  // 👈 Corregido aquí también
+    variables: { fincaId }
+  })
+
+  const { data: animalesProduccion, loading: loadingAnimales } = useQuery(GET_ANIMALES_PRODUCCION, {
     variables: { fincaId }
   })
 
@@ -106,9 +111,10 @@ export const useProduccion = () => {
     produccionesHoy: produccionesHoy?.produccionesHoy || [],
     produccionTotalHoy: produccionTotalHoy?.produccionTotalHoy || 0,
     top5Vacas: top5Vacas?.top5VacasProduccion || [],
-    
+    animalesProduccion: animalesProduccion?.animalesActivos || [],
+
     // Loading
-    loading: loadingLactancias || loadingActivas || loadingProducciones || loadingHoy,
+    loading: loadingLactancias || loadingActivas || loadingProducciones || loadingHoy || loadingAnimales,
     
     // Functions
     crearLactancia,

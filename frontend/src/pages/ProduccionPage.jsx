@@ -10,20 +10,27 @@ import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
   Typography, Tabs, Tab, Chip, Card, CardContent, Grid,
   TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel,
-  Stack, IconButton, Tooltip,
+  Stack, IconButton, Tooltip, Button,
 } from '@mui/material'
 import LocalDrinkOutlinedIcon    from '@mui/icons-material/LocalDrinkOutlined'
 import PetsOutlinedIcon          from '@mui/icons-material/PetsOutlined'
 import BarChartOutlinedIcon      from '@mui/icons-material/BarChartOutlined'
 import FitnessCenterOutlinedIcon from '@mui/icons-material/FitnessCenterOutlined'
+import RestaurantOutlinedIcon    from '@mui/icons-material/RestaurantOutlined'
 import AddCircleOutlinedIcon     from '@mui/icons-material/AddCircleOutlined'
 import EmojiEventsOutlinedIcon   from '@mui/icons-material/EmojiEventsOutlined'
 import SearchIcon                from '@mui/icons-material/Search'
 import ClearIcon                 from '@mui/icons-material/Clear'
 import FilterListIcon            from '@mui/icons-material/FilterList'
 
+// Convierte cualquier valor a número seguro (evita NaN en los indicadores)
+const safeNum = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 const KPI = ({ label, value, sub, accent }) => (
-  <Card elevation={0} sx={{ border: '1px solid #E2E8F0', borderLeft: `4px solid ${accent}`, borderRadius: 2 }}>
+  <Card elevation={0} sx={{ border: '1px solid #E2E8F0', borderLeft: `4px solid ${accent}`, borderRadius: 2, height: '100%' }}>
     <CardContent sx={{ p: '16px !important' }}>
       <Typography variant="caption" color="text.secondary">{label}</Typography>
       <Typography variant="h5" fontWeight={700} sx={{ color: accent, lineHeight: 1.2 }}>{value}</Typography>
@@ -32,19 +39,102 @@ const KPI = ({ label, value, sub, accent }) => (
   </Card>
 )
 
+// Pestañas del módulo de Producción Ganadera
+const TAB_DASHBOARD = 0
+const TAB_LECHE     = 1
+const TAB_CARNE     = 2
+const TAB_PESO      = 3
+const TAB_LACTANCIAS = 4
+
 const TABS = [
-  { label: 'Dashboard',            Icon: BarChartOutlinedIcon },
-  { label: 'Lactancias',           Icon: PetsOutlinedIcon },
-  { label: 'Registrar Producción', Icon: LocalDrinkOutlinedIcon },
-  { label: 'Registro Peso',        Icon: FitnessCenterOutlinedIcon },
-  { label: '+ Nueva Lactancia',    Icon: AddCircleOutlinedIcon },
+  { label: 'Dashboard',        Icon: BarChartOutlinedIcon },
+  { label: 'Leche',            Icon: LocalDrinkOutlinedIcon },
+  { label: 'Carne / Engorde',  Icon: RestaurantOutlinedIcon },
+  { label: 'Registro Peso',    Icon: FitnessCenterOutlinedIcon },
+  { label: 'Lactancias',       Icon: PetsOutlinedIcon },
 ]
 
+const esCarne = (a) => a.tipoProduccion === 'CARNE' || a.tipoProduccion === 'DOBLE_PROPOSITO'
+const esLeche = (a) => a.tipoProduccion === 'LECHE' || a.tipoProduccion === 'DOBLE_PROPOSITO'
+
+const ultimaFechaPesaje = (a) => {
+  if (!a.registrosPeso || a.registrosPeso.length === 0) return null
+  // El backend ya entrega los registros ordenados por fecha descendente
+  return a.registrosPeso[0]?.fechaPesaje || null
+}
+
+const TIPO_LABEL = {
+  CARNE: 'Carne',
+  LECHE: 'Leche',
+  DOBLE_PROPOSITO: 'Doble propósito',
+}
+
+// Tabla reutilizable de animales para las secciones Leche y Carne / Engorde
+const AnimalesTable = ({ animales, emptyMsg }) => (
+  <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Arete</TableCell>
+            <TableCell>Nombre</TableCell>
+            <TableCell>Sexo</TableCell>
+            <TableCell>Raza</TableCell>
+            <TableCell>Categoría</TableCell>
+            <TableCell>Tipo</TableCell>
+            <TableCell>Peso actual</TableCell>
+            <TableCell>Estado</TableCell>
+            <TableCell>Último pesaje</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {animales.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={9} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                {emptyMsg}
+              </TableCell>
+            </TableRow>
+          ) : (
+            animales.map(a => {
+              const fecha = ultimaFechaPesaje(a)
+              return (
+                <TableRow key={a.id} hover>
+                  <TableCell><Typography variant="body2" fontWeight={600}>{a.nroArete}</Typography></TableCell>
+                  <TableCell>{a.nombre || '—'}</TableCell>
+                  <TableCell>{a.sexo === 'MACHO' ? 'Macho' : 'Hembra'}</TableCell>
+                  <TableCell>{a.raza?.nombre || '—'}</TableCell>
+                  <TableCell>{a.categoria?.nombre || '—'}</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={TIPO_LABEL[a.tipoProduccion] || a.tipoProduccion}
+                      sx={{ bgcolor: '#EEF2FF', color: '#3730A3', fontWeight: 500 }} />
+                  </TableCell>
+                  <TableCell>{safeNum(a.peso).toFixed(1)} kg</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={a.estado}
+                      sx={{ bgcolor: '#DCFCE7', color: '#166534', fontWeight: 500 }} />
+                  </TableCell>
+                  <TableCell>
+                    {fecha ? new Date(fecha).toLocaleDateString('es-PY') : 'Sin pesaje'}
+                  </TableCell>
+                </TableRow>
+              )
+            })
+          )}
+        </TableBody>
+      </Table>
+    </Box>
+  </Paper>
+)
+
 export default function ProduccionPage() {
-  const { lactancias, produccionesHoy, produccionTotalHoy, top5Vacas, loading } = useProduccion()
-  const [tabIdx, setTabIdx] = useState(0)
-  
-  // Estados para filtros
+  const {
+    lactancias, produccionesHoy, produccionTotalHoy, top5Vacas,
+    animalesProduccion, loading,
+  } = useProduccion()
+  const [tabIdx, setTabIdx] = useState(TAB_DASHBOARD)
+  const [mostrarNuevaLactancia, setMostrarNuevaLactancia] = useState(false)
+
+  // Estados para filtros (sección Lactancias)
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [estadoFilter, setEstadoFilter] = useState('todos')
@@ -60,45 +150,40 @@ export default function ProduccionPage() {
   // ==========================================
   const lactanciasFiltradas = useMemo(() => {
     let filtered = [...lactancias]
-    
-    // Filtro por búsqueda
+
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(l => 
+      filtered = filtered.filter(l =>
         l.vaca?.nroArete?.toLowerCase().includes(term) ||
         l.vaca?.nombre?.toLowerCase().includes(term)
       )
     }
-    
-    // Filtro por estado
+
     if (estadoFilter !== 'todos') {
       filtered = filtered.filter(l => l.estado === estadoFilter)
     }
-    
-    // Filtro por rango de días en lactancia
+
     if (rangoDiasMin) {
       filtered = filtered.filter(l => (l.diasProduccion || 0) >= parseInt(rangoDiasMin))
     }
     if (rangoDiasMax) {
       filtered = filtered.filter(l => (l.diasProduccion || 0) <= parseInt(rangoDiasMax))
     }
-    
-    // Filtro por producción promedio
+
     if (produccionMin) {
       filtered = filtered.filter(l => (l.promedioDiario || 0) >= parseFloat(produccionMin))
     }
     if (produccionMax) {
       filtered = filtered.filter(l => (l.promedioDiario || 0) <= parseFloat(produccionMax))
     }
-    
-    // Filtro por fecha de inicio
+
     if (fechaInicio) {
       filtered = filtered.filter(l => new Date(l.fechaInicio) >= new Date(fechaInicio))
     }
     if (fechaFin) {
       filtered = filtered.filter(l => new Date(l.fechaInicio) <= new Date(fechaFin))
     }
-    
+
     return filtered
   }, [lactancias, searchTerm, estadoFilter, rangoDiasMin, rangoDiasMax, produccionMin, produccionMax, fechaInicio, fechaFin])
 
@@ -115,40 +200,70 @@ export default function ProduccionPage() {
 
   if (loading) return <LoadingSpinner />
 
-  const lactanciasActivas = lactanciasFiltradas.filter(l => l.estado === 'ACTIVA')
-  const promedio = lactanciasFiltradas.length > 0
-    ? (lactanciasFiltradas.reduce((s, l) => s + (l.promedioDiario || 0), 0) / lactanciasFiltradas.length).toFixed(1)
-    : '0'
+  // ==========================================
+  // MÉTRICAS DEL DASHBOARD (con valores seguros, sin NaN)
+  // ==========================================
+  const lactanciasActivas = lactancias.filter(l => l.estado === 'ACTIVA')
+  const totalLactancias = lactancias.length
 
-  const tabsWithCount = TABS.map((t, i) => ({ ...t, count: i === 1 ? lactanciasFiltradas.length : undefined }))
+  // Promedio por vaca: media de la producción diaria de las lactancias activas.
+  // Si no hay lactancias activas (divisor 0) → 0, nunca NaN.
+  const promedio = (
+    lactanciasActivas.length > 0
+      ? lactanciasActivas.reduce((s, l) => s + safeNum(l.promedioDiario), 0) / lactanciasActivas.length
+      : 0
+  )
+  const promedioTexto = safeNum(promedio).toFixed(1)
 
-  const hayFiltrosActivos = searchTerm || estadoFilter !== 'todos' || rangoDiasMin || rangoDiasMax || 
+  // Animales (ya vienen sólo activos desde el backend)
+  const animalesCarne = animalesProduccion.filter(esCarne)
+  const animalesLeche = animalesProduccion.filter(esLeche)
+  const animalesEnEngorde = animalesCarne.length
+  const animalesSinPesaje = animalesProduccion.filter(
+    a => !a.registrosPeso || a.registrosPeso.length === 0
+  ).length
+
+  const tabsWithCount = TABS.map((t, i) => ({
+    ...t,
+    count: i === TAB_LACTANCIAS ? lactanciasFiltradas.length : undefined,
+  }))
+
+  const hayFiltrosActivos = searchTerm || estadoFilter !== 'todos' || rangoDiasMin || rangoDiasMax ||
                             produccionMin || produccionMax || fechaInicio || fechaFin
 
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       <Box>
-        <Typography variant="h5" fontWeight={700}>Módulo de Producción Lechera</Typography>
-        <Typography variant="body2" color="text.secondary">Gestión de lactancias, producción diaria y pesos</Typography>
+        <Typography variant="h5" fontWeight={700}>Módulo de Producción Ganadera</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Gestión de leche, carne, pesajes, lactancias y rendimiento animal
+        </Typography>
       </Box>
 
+      {/* Indicadores del Dashboard */}
       <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPI label="Producción hoy" value={`${produccionTotalHoy || 0} L`} sub={`${produccionesHoy.length} registros`} accent="#1565C0" />
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <KPI label="Producción leche hoy" value={`${safeNum(produccionTotalHoy)} L`} sub={`${produccionesHoy.length} registros`} accent="#1565C0" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <KPI label="Lactancias activas" value={lactanciasActivas.length} accent="#2E7D32" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPI label="Total lactancias" value={lactanciasFiltradas.length} accent="#6A1B9A" />
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <KPI label="Total lactancias" value={totalLactancias} accent="#6A1B9A" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPI label="Promedio por vaca" value={`${promedio} L/día`} accent="#E65100" />
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <KPI label="Promedio por vaca" value={`${promedioTexto} L/día`} accent="#E65100" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <KPI label="Animales en engorde" value={animalesEnEngorde} accent="#B45309" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <KPI label="Animales sin pesaje" value={animalesSinPesaje} accent="#64748B" />
         </Grid>
       </Grid>
 
-      {/* Barra de búsqueda y filtros - solo visible en pestaña de Lactancias */}
-      {tabIdx === 1 && (
+      {/* Barra de búsqueda y filtros - solo visible en la pestaña de Lactancias */}
+      {tabIdx === TAB_LACTANCIAS && (
         <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
             <TextField
@@ -172,7 +287,7 @@ export default function ProduccionPage() {
                 ),
               }}
             />
-            
+
             <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
               <Tooltip title="Filtros avanzados">
                 <IconButton onClick={() => setShowFilters(!showFilters)} color={showFilters ? 'primary' : 'default'}>
@@ -180,9 +295,9 @@ export default function ProduccionPage() {
                 </IconButton>
               </Tooltip>
               {hayFiltrosActivos && (
-                <Chip 
-                  label="Limpiar filtros" 
-                  size="small" 
+                <Chip
+                  label="Limpiar filtros"
+                  size="small"
                   onClick={limpiarFiltros}
                   onDelete={limpiarFiltros}
                 />
@@ -190,7 +305,6 @@ export default function ProduccionPage() {
             </Box>
           </Stack>
 
-          {/* Filtros avanzados */}
           {showFilters && (
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
               <FormControl size="small" sx={{ minWidth: 130 }}>
@@ -267,7 +381,6 @@ export default function ProduccionPage() {
             </Stack>
           )}
 
-          {/* Indicador de resultados filtrados */}
           {hayFiltrosActivos && (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
               {lactanciasFiltradas.length} de {lactancias.length} lactancias encontradas
@@ -286,8 +399,8 @@ export default function ProduccionPage() {
         </Tabs>
       </Box>
 
-      {/* Dashboard */}
-      {tabIdx === 0 && (
+      {/* ===================== Dashboard ===================== */}
+      {tabIdx === TAB_DASHBOARD && (
         <Grid container spacing={2}>
           {top5Vacas && top5Vacas.length > 0 && (
             <Grid item xs={12}>
@@ -325,7 +438,7 @@ export default function ProduccionPage() {
                     <Box textAlign="right">
                       <Typography variant="caption" color="text.secondary">Inicio: {new Date(l.fechaInicio).toLocaleDateString('es-PY')}</Typography>
                       <Typography variant="body2" fontWeight={700} color="primary" display="block">
-                        {parseFloat(l.promedioDiario || 0).toFixed(1)} L/día
+                        {safeNum(l.promedioDiario).toFixed(1)} L/día
                       </Typography>
                     </Box>
                   </Box>
@@ -354,63 +467,108 @@ export default function ProduccionPage() {
         </Grid>
       )}
 
-      {/* Lactancias con filtros aplicados */}
-      {tabIdx === 1 && (
-        <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Vaca</TableCell>
-                  <TableCell>N° Lactancia</TableCell>
-                  <TableCell>Fecha inicio</TableCell>
-                  <TableCell>Días</TableCell>
-                  <TableCell>Total litros</TableCell>
-                  <TableCell>Promedio</TableCell>
-                  <TableCell>Estado</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {lactanciasFiltradas.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                      {searchTerm || hayFiltrosActivos 
-                        ? 'No hay lactancias que coincidan con la búsqueda' 
-                        : 'Sin lactancias registradas'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  lactanciasFiltradas.map(l => (
-                    <TableRow key={l.id} hover>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600}>{l.vaca?.nroArete}</Typography>
-                        <Typography variant="caption" color="text.secondary">{l.vaca?.nombre || ''}</Typography>
-                      </TableCell>
-                      <TableCell>{l.numeroLactancia}</TableCell>
-                      <TableCell>{new Date(l.fechaInicio).toLocaleDateString('es-PY')}</TableCell>
-                      <TableCell>{l.diasProduccion || 0}</TableCell>
-                      <TableCell>{parseFloat(l.totalLitros || 0).toFixed(1)} L</TableCell>
-                      <TableCell>{parseFloat(l.promedioDiario || 0).toFixed(1)} L/día</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={l.estado}
-                          sx={l.estado === 'ACTIVA'
-                            ? { bgcolor: '#DCFCE7', color: '#166534', fontWeight: 500 }
-                            : l.estado === 'SECADA'
-                            ? { bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 500 }
-                            : { bgcolor: '#F1F5F9', color: '#475569', fontWeight: 500 }} />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+      {/* ===================== Leche ===================== */}
+      {tabIdx === TAB_LECHE && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <ProduccionLecheForm onSuccess={() => setTabIdx(TAB_DASHBOARD)} />
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              Animales de leche
+            </Typography>
+            <AnimalesTable
+              animales={animalesLeche}
+              emptyMsg="No hay animales de leche registrados."
+            />
           </Box>
-        </Paper>
+        </Box>
       )}
 
-      {tabIdx === 2 && <ProduccionLecheForm onSuccess={() => setTabIdx(0)} />}
-      {tabIdx === 3 && <RegistroPesoForm    onSuccess={() => setTabIdx(0)} />}
-      {tabIdx === 4 && <LactanciaForm       onSuccess={() => setTabIdx(1)} />}
+      {/* ===================== Carne / Engorde ===================== */}
+      {tabIdx === TAB_CARNE && (
+        <Box>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+            Animales de carne y engorde
+          </Typography>
+          <AnimalesTable
+            animales={animalesCarne}
+            emptyMsg="No hay animales de carne o engorde registrados."
+          />
+        </Box>
+      )}
+
+      {/* ===================== Registro Peso ===================== */}
+      {tabIdx === TAB_PESO && <RegistroPesoForm onSuccess={() => setTabIdx(TAB_DASHBOARD)} />}
+
+      {/* ===================== Lactancias ===================== */}
+      {tabIdx === TAB_LACTANCIAS && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant={mostrarNuevaLactancia ? 'outlined' : 'contained'}
+              startIcon={<AddCircleOutlinedIcon />}
+              onClick={() => setMostrarNuevaLactancia(v => !v)}
+              sx={{ textTransform: 'none' }}
+            >
+              {mostrarNuevaLactancia ? 'Cerrar' : 'Nueva Lactancia'}
+            </Button>
+          </Box>
+
+          {mostrarNuevaLactancia && (
+            <LactanciaForm onSuccess={() => setMostrarNuevaLactancia(false)} />
+          )}
+
+          <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Vaca</TableCell>
+                    <TableCell>N° Lactancia</TableCell>
+                    <TableCell>Fecha inicio</TableCell>
+                    <TableCell>Días</TableCell>
+                    <TableCell>Total litros</TableCell>
+                    <TableCell>Promedio</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {lactanciasFiltradas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        {searchTerm || hayFiltrosActivos
+                          ? 'No hay lactancias que coincidan con la búsqueda'
+                          : 'Sin lactancias registradas'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    lactanciasFiltradas.map(l => (
+                      <TableRow key={l.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>{l.vaca?.nroArete}</Typography>
+                          <Typography variant="caption" color="text.secondary">{l.vaca?.nombre || ''}</Typography>
+                        </TableCell>
+                        <TableCell>{l.numeroLactancia}</TableCell>
+                        <TableCell>{new Date(l.fechaInicio).toLocaleDateString('es-PY')}</TableCell>
+                        <TableCell>{l.diasProduccion || 0}</TableCell>
+                        <TableCell>{safeNum(l.totalLitros).toFixed(1)} L</TableCell>
+                        <TableCell>{safeNum(l.promedioDiario).toFixed(1)} L/día</TableCell>
+                        <TableCell>
+                          <Chip size="small" label={l.estado}
+                            sx={l.estado === 'ACTIVA'
+                              ? { bgcolor: '#DCFCE7', color: '#166534', fontWeight: 500 }
+                              : l.estado === 'SECADA'
+                              ? { bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 500 }
+                              : { bgcolor: '#F1F5F9', color: '#475569', fontWeight: 500 }} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+          </Paper>
+        </Box>
+      )}
     </Box>
   )
 }
