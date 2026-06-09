@@ -34,8 +34,8 @@ export const GET_TIPO_EMPLEADO = gql`
 // ==========================================
 
 export const GET_EMPLEADOS = gql`
-  query GetEmpleados($fincaId: ID!, $estado: String, $tipoId: ID) {
-    empleados(fincaId: $fincaId, estado: $estado, tipoId: $tipoId) {
+  query GetEmpleados($fincaId: ID!, $estadoLaboral: String, $tipoId: ID, $tipoEmpleado: String) {
+    empleados(fincaId: $fincaId, estadoLaboral: $estadoLaboral, tipoId: $tipoId, tipoEmpleado: $tipoEmpleado) {
       id
       nombre
       apellidos
@@ -46,15 +46,28 @@ export const GET_EMPLEADOS = gql`
       telefono
       email
       direccion
+      tipoEmpleado
       fechaIngreso
-      fechaRetiro
       salario
-      estado
+      estadoLaboral
+      fechaSalida
+      motivoSalida
       isActivo
       observaciones
+      cargoNombre
+      documentoCiUrl
+      contratoUrl
       tipo {
         id
         nombre
+      }
+      finca {
+        id
+        nombre
+      }
+      usuario {
+        id
+        username
       }
     }
   }
@@ -73,15 +86,28 @@ export const GET_EMPLEADO = gql`
       telefono
       email
       direccion
+      tipoEmpleado
       fechaIngreso
-      fechaRetiro
       salario
-      estado
+      estadoLaboral
+      fechaSalida
+      motivoSalida
       isActivo
       observaciones
+      cargoNombre
+      documentoCiUrl
+      contratoUrl
       tipo {
         id
         nombre
+      }
+      finca {
+        id
+        nombre
+      }
+      usuario {
+        id
+        username
       }
     }
   }
@@ -178,9 +204,13 @@ export const CREATE_EMPLEADO = gql`
     $telefono: String
     $email: String
     $direccion: String
+    $tipoEmpleado: String
     $fechaIngreso: Date!
     $salario: Decimal
-    $estado: String
+    $estadoLaboral: String
+    $fechaSalida: Date
+    $motivoSalida: String
+    $usuarioId: ID
     $observaciones: String
   ) {
     crearEmpleado(
@@ -194,9 +224,13 @@ export const CREATE_EMPLEADO = gql`
       telefono: $telefono
       email: $email
       direccion: $direccion
+      tipoEmpleado: $tipoEmpleado
       fechaIngreso: $fechaIngreso
       salario: $salario
-      estado: $estado
+      estadoLaboral: $estadoLaboral
+      fechaSalida: $fechaSalida
+      motivoSalida: $motivoSalida
+      usuarioId: $usuarioId
       observaciones: $observaciones
     ) {
       empleado {
@@ -212,6 +246,7 @@ export const CREATE_EMPLEADO = gql`
 export const UPDATE_EMPLEADO = gql`
   mutation ActualizarEmpleado(
     $id: ID!
+    $fincaId: ID
     $tipoId: ID
     $nombre: String
     $apellidos: String
@@ -221,14 +256,18 @@ export const UPDATE_EMPLEADO = gql`
     $telefono: String
     $email: String
     $direccion: String
+    $tipoEmpleado: String
     $fechaIngreso: Date
-    $fechaRetiro: Date
     $salario: Decimal
-    $estado: String
+    $estadoLaboral: String
+    $fechaSalida: Date
+    $motivoSalida: String
+    $usuarioId: ID
     $observaciones: String
   ) {
     actualizarEmpleado(
       id: $id
+      fincaId: $fincaId
       tipoId: $tipoId
       nombre: $nombre
       apellidos: $apellidos
@@ -238,16 +277,19 @@ export const UPDATE_EMPLEADO = gql`
       telefono: $telefono
       email: $email
       direccion: $direccion
+      tipoEmpleado: $tipoEmpleado
       fechaIngreso: $fechaIngreso
-      fechaRetiro: $fechaRetiro
       salario: $salario
-      estado: $estado
+      estadoLaboral: $estadoLaboral
+      fechaSalida: $fechaSalida
+      motivoSalida: $motivoSalida
+      usuarioId: $usuarioId
       observaciones: $observaciones
     ) {
       empleado {
         id
         nombreCompleto
-        estado
+        estadoLaboral
       }
       success
       message

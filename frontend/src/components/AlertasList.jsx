@@ -1,29 +1,41 @@
 // frontend/src/components/AlertasList.jsx
-import React from 'react'
+import { Box, Paper, Typography } from '@mui/material'
+import NotificationsOffOutlinedIcon from '@mui/icons-material/NotificationsOffOutlined'
 import AlertaCard from './AlertaCard'
 
-const AlertasList = ({ alertas, onMarcarLeida, onEliminar, titulo }) => {
+export default function AlertasList({
+  alertas, titulo,
+  onMarcarLeida, onEnProceso, onResolver, onDescartar, onEliminar,
+}) {
   if (!alertas || alertas.length === 0) {
     return (
-      <div className="bg-gray-50 rounded-lg p-8 text-center">
-        <p className="text-gray-500">🔔 No hay alertas para mostrar</p>
-      </div>
+      <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, p: 6, textAlign: 'center' }}>
+        <NotificationsOffOutlinedIcon sx={{ fontSize: 40, color: '#CBD5E1' }} />
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          No hay alertas para mostrar
+        </Typography>
+      </Paper>
     )
   }
 
   return (
-    <div>
-      {titulo && <h3 className="text-lg font-semibold mb-3">{titulo} ({alertas.length})</h3>}
-      {alertas.map(alerta => (
+    <Box>
+      {titulo && (
+        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+          {titulo} ({alertas.length})
+        </Typography>
+      )}
+      {alertas.map((alerta) => (
         <AlertaCard
           key={alerta.id}
           alerta={alerta}
           onMarcarLeida={onMarcarLeida}
+          onEnProceso={onEnProceso}
+          onResolver={onResolver}
+          onDescartar={onDescartar}
           onEliminar={onEliminar}
         />
       ))}
-    </div>
+    </Box>
   )
 }
-
-export default AlertasList

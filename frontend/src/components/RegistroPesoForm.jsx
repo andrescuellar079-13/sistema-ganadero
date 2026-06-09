@@ -16,10 +16,35 @@ const RegistroPesoForm = ({ onSuccess }) => {
     observacion: ''
   })
   
+  // Estados en los que un animal ya no debe recibir pesajes
+  const ESTADOS_NO_VALIDOS = ['VENDIDO', 'MUERTO', 'BAJA', 'MATADERO', 'DESCARTE']
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // --- Validaciones básicas ---
+    if (!formData.animalId) {
+      alert('❌ Debe seleccionar un animal')
+      return
+    }
+    if (!formData.fechaPesaje) {
+      alert('❌ La fecha de pesaje es obligatoria')
+      return
+    }
+    const peso = parseFloat(formData.pesoKg)
+    if (isNaN(peso) || peso < 0) {
+      alert('❌ El peso no puede ser negativo')
+      return
+    }
+
+    const animalSel = animales.find(a => String(a.id) === String(formData.animalId))
+    if (animalSel && ESTADOS_NO_VALIDOS.includes(animalSel.estado)) {
+      alert(`❌ No se puede registrar peso a un animal en estado ${animalSel.estado}`)
+      return
+    }
+
     setLoading(true)
-    
+
     const result = await crearRegistroPeso({
       animalId: formData.animalId,
       pesoKg: parseFloat(formData.pesoKg),
@@ -71,6 +96,7 @@ const RegistroPesoForm = ({ onSuccess }) => {
           <input
             type="number"
             step="0.1"
+            min="0"
             required
             value={formData.pesoKg}
             onChange={(e) => setFormData({...formData, pesoKg: e.target.value})}

@@ -1,7 +1,9 @@
 # backend/sanidad/schema.py
 from datetime import date, timedelta
+from decimal import Decimal
 
 import graphene
+from django.db import transaction
 from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
 
@@ -21,26 +23,136 @@ from .models import (
 
 
 # ==========================================
+# HELPERS DE VACUNACIÓN
+# ==========================================
+
+def _edad_meses(animal, referencia):
+    """Edad del animal (en meses) a la fecha `referencia`. None si no hay nacimiento."""
+    if not animal.fecha_nacimiento:
+        return None
+    delta = (referencia.year - animal.fecha_nacimiento.year) * 12 + (
+        referencia.month - animal.fecha_nacimiento.month
+    )
+    if referencia.day < animal.fecha_nacimiento.day:
+        delta -= 1
+    return max(delta, 0)
+
+
+def _estado_proxima(fecha_proxima):
+    """Estado de la próxima dosis: SIN_PROXIMA / VENCIDA / PROXIMA / VIGENTE."""
+    if not fecha_proxima:
+        return "SIN_PROXIMA"
+    hoy = date.today()
+    if fecha_proxima < hoy:
+        return "VENCIDA"
+    if fecha_proxima <= hoy + timedelta(days=30):
+        return "PROXIMA"
+    return "VIGENTE"
+
+
+def _prioridad_por_dias(dias_restantes):
+    if dias_restantes < 0:
+        return "CRITICA"
+    if dias_restantes <= 7:
+        return "ALTA"
+    if dias_restantes <= 30:
+        return "MEDIA"
+    return "BAJA"
+
+
+def _generar_alerta_vacuna_proxima(vacunacion):
+    """Crea (idempotente) la alerta VACUNA_PROXIMA para la próxima dosis."""
+    from alertas.models import Alerta
+
+    if not vacunacion.fecha_proxima:
+        return None
+
+    vacuna = vacunacion.vacuna
+    anticipacion = getattr(vacuna, "dias_anticipacion_alerta", None) or 30
+    fecha_alerta = vacunacion.fecha_proxima - timedelta(days=anticipacion)
+    dias_restantes = (vacunacion.fecha_proxima - date.today()).days
+
+    alerta, _ = Alerta.objects.get_or_create(
+        finca=vacunacion.finca,
+        animal=vacunacion.animal,
+        tipo="VACUNA_PROXIMA",
+        referencia_tipo="Vacunacion",
+        referencia_id=vacunacion.id,
+        fecha_vencimiento=vacunacion.fecha_proxima,
+        defaults={
+            "mensaje": (
+                f"Próxima dosis de '{vacuna.nombre}' para {vacunacion.animal} "
+                f"el {vacunacion.fecha_proxima:%d/%m/%Y}."
+            ),
+            "fecha_alerta": fecha_alerta,
+            "dias_restantes": dias_restantes,
+            "prioridad": _prioridad_por_dias(dias_restantes),
+            "estado": "PENDIENTE",
+            "modulo_origen": "SANIDAD",
+            "accion_recomendada": "Programar y aplicar la próxima dosis de la vacuna.",
+        },
+    )
+    return alerta
+
+
+def _generar_alerta_stock_bajo(vacuna, finca):
+    """Crea (idempotente) la alerta STOCK_BAJO_VACUNA si el stock quedó bajo."""
+    from alertas.models import Alerta
+
+    if not vacuna.is_stock_bajo():
+        return None
+
+    # Evitar duplicar una alerta de stock pendiente para la misma vacuna.
+    alerta, _ = Alerta.objects.get_or_create(
+        finca=finca,
+        tipo="STOCK_BAJO_VACUNA",
+        referencia_tipo="Vacuna",
+        referencia_id=vacuna.id,
+        estado="PENDIENTE",
+        defaults={
+            "mensaje": (
+                f"Stock bajo de la vacuna '{vacuna.nombre}': "
+                f"{vacuna.stock_cantidad} disponible(s) (mínimo {vacuna.stock_minimo})."
+            ),
+            "fecha_alerta": date.today(),
+            "dias_restantes": 0,
+            "prioridad": "ALTA",
+            "modulo_origen": "SANIDAD",
+            "accion_recomendada": "Reabastecer el stock de la vacuna.",
+        },
+    )
+    return alerta
+
+
+# ==========================================
 # TYPES EXISTENTES (con campos correctos)
 # ==========================================
 
 class VacunacionType(DjangoObjectType):
     nombreVacuna = graphene.String()
+    nombreVeterinario = graphene.String()
     fechaAplicacion = graphene.Date()
     fechaProxima = graphene.Date()
-    
+    estadoProxima = graphene.String()
+
     class Meta:
         model = Vacunacion
         fields = "__all__"
-    
+
     def resolve_nombreVacuna(self, info):
         return self.vacuna.nombre if self.vacuna else None
-    
+
+    def resolve_nombreVeterinario(self, info):
+        return str(self.veterinario) if self.veterinario else None
+
     def resolve_fechaAplicacion(self, info):
         return self.fecha_aplicacion
-    
+
     def resolve_fechaProxima(self, info):
         return self.fecha_proxima
+
+    def resolve_estadoProxima(self, info):
+        return _estado_proxima(self.fecha_proxima)
 
 
 class TratamientoType(DjangoObjectType):
@@ -229,7 +341,16 @@ class TiempoRetiroType(DjangoObjectType):
 
 class Query(graphene.ObjectType):
     # Queries existentes
-    vacunaciones = graphene.List(VacunacionType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
+    vacunaciones = graphene.List(
+        VacunacionType,
+        finca_id=graphene.ID(required=True),
+        animal_id=graphene.ID(),
+        vacuna_id=graphene.ID(),
+        veterinario_id=graphene.ID(),
+        campana=graphene.String(),
+        fecha_desde=graphene.Date(),
+        fecha_hasta=graphene.Date(),
+    )
     tratamientos = graphene.List(TratamientoType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
     tratamientos_activos = graphene.List(TratamientoType, finca_id=graphene.ID(required=True))
     desparasitaciones = graphene.List(DesparasitacionType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
@@ -237,8 +358,8 @@ class Query(graphene.ObjectType):
     animal_medicamentos = graphene.List(AnimalMedicamentoType, finca_id=graphene.ID(required=True))
     diagnosticos = graphene.List(DiagnosticoType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
     observaciones_sanitarias = graphene.List(ObservacionType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
-    vacunas_proximas = graphene.List(VacunacionType, dias=graphene.Int(default_value=30))
-    vacunas_vencidas = graphene.List(VacunacionType)
+    vacunas_proximas = graphene.List(VacunacionType, finca_id=graphene.ID(), dias=graphene.Int(default_value=30))
+    vacunas_vencidas = graphene.List(VacunacionType, finca_id=graphene.ID())
     
     # Nuevas queries
     enfermedades = graphene.List(EnfermedadType, enfermedad_id=graphene.ID())
@@ -247,10 +368,24 @@ class Query(graphene.ObjectType):
     tiempos_retiro = graphene.List(TiempoRetiroType, finca_id=graphene.ID(required=True), animal_id=graphene.ID(), activos=graphene.Boolean())
     animales_en_retiro = graphene.List(TiempoRetiroType, finca_id=graphene.ID(required=True))
     
-    def resolve_vacunaciones(self, info, finca_id, animal_id=None):
-        queryset = Vacunacion.objects.filter(finca_id=finca_id)
+    def resolve_vacunaciones(self, info, finca_id, animal_id=None, vacuna_id=None,
+                             veterinario_id=None, campana=None,
+                             fecha_desde=None, fecha_hasta=None):
+        queryset = Vacunacion.objects.filter(finca_id=finca_id).select_related(
+            "animal", "vacuna", "veterinario"
+        )
         if animal_id:
             queryset = queryset.filter(animal_id=animal_id)
+        if vacuna_id:
+            queryset = queryset.filter(vacuna_id=vacuna_id)
+        if veterinario_id:
+            queryset = queryset.filter(veterinario_id=veterinario_id)
+        if campana:
+            queryset = queryset.filter(campana__icontains=campana)
+        if fecha_desde:
+            queryset = queryset.filter(fecha_aplicacion__gte=fecha_desde)
+        if fecha_hasta:
+            queryset = queryset.filter(fecha_aplicacion__lte=fecha_hasta)
         return queryset
 
     def resolve_tratamientos(self, info, finca_id, animal_id=None):
@@ -286,14 +421,24 @@ class Query(graphene.ObjectType):
             queryset = queryset.filter(animal_id=animal_id)
         return queryset
 
-    def resolve_vacunas_proximas(self, info, dias=30):
+    def resolve_vacunas_proximas(self, info, finca_id=None, dias=30):
         hoy = date.today()
         limite = hoy + timedelta(days=dias)
-        return Vacunacion.objects.filter(fecha_proxima__gte=hoy, fecha_proxima__lte=limite)
+        queryset = Vacunacion.objects.filter(
+            fecha_proxima__gte=hoy, fecha_proxima__lte=limite
+        ).select_related("animal", "vacuna")
+        if finca_id:
+            queryset = queryset.filter(finca_id=finca_id)
+        return queryset
 
-    def resolve_vacunas_vencidas(self, info):
+    def resolve_vacunas_vencidas(self, info, finca_id=None):
         hoy = date.today()
-        return Vacunacion.objects.filter(fecha_proxima__lt=hoy)
+        queryset = Vacunacion.objects.filter(fecha_proxima__lt=hoy).select_related(
+            "animal", "vacuna"
+        )
+        if finca_id:
+            queryset = queryset.filter(finca_id=finca_id)
+        return queryset
     
     def resolve_enfermedades(self, info, enfermedad_id=None):
         queryset = Enfermedad.objects.all()
@@ -342,6 +487,7 @@ class CrearVacunacion(graphene.Mutation):
         animal_id = graphene.ID(required=True)
         vacuna_id = graphene.ID(required=True)
         fecha_aplicacion = graphene.Date(required=True)
+        veterinario_id = graphene.ID()
         campana = graphene.String()
         lote = graphene.String()
         dosis_aplicada = graphene.String()
@@ -352,36 +498,112 @@ class CrearVacunacion(graphene.Mutation):
     vacunacion = graphene.Field(VacunacionType)
     success = graphene.Boolean()
     message = graphene.String()
+    advertencia = graphene.String()
 
     @login_required
     def mutate(self, info, finca_id, animal_id, vacuna_id, fecha_aplicacion, **kwargs):
         try:
             from fincas.models import Finca
             from animales.models import Animal
-            from catalogos.models import Vacuna
+            from catalogos.models import Vacuna, Veterinario
+
+            if not fecha_aplicacion:
+                return CrearVacunacion(success=False, message="La fecha de aplicación es obligatoria")
 
             finca = Finca.objects.get(id=finca_id)
-            animal = Animal.objects.get(id=animal_id)
-            vacuna = Vacuna.objects.get(id=vacuna_id)
+
+            # --- Pertenencia a la finca activa ---
+            try:
+                animal = Animal.objects.get(id=animal_id, finca=finca)
+            except Animal.DoesNotExist:
+                return CrearVacunacion(success=False, message="El animal no pertenece a la finca activa")
+
+            try:
+                vacuna = Vacuna.objects.get(id=vacuna_id, finca=finca)
+            except Vacuna.DoesNotExist:
+                return CrearVacunacion(success=False, message="La vacuna no pertenece a la finca activa")
+
+            veterinario = None
+            veterinario_id = kwargs.get('veterinario_id')
+            if veterinario_id:
+                try:
+                    veterinario = Veterinario.objects.get(id=veterinario_id, finca=finca)
+                except Veterinario.DoesNotExist:
+                    return CrearVacunacion(success=False, message="El veterinario no pertenece a la finca activa")
+
+            # --- Validaciones de la vacuna ---
+            if not vacuna.activo:
+                return CrearVacunacion(success=False, message=f"La vacuna '{vacuna.nombre}' está inactiva")
+            if vacuna.is_vencida():
+                return CrearVacunacion(
+                    success=False,
+                    message=f"La vacuna '{vacuna.nombre}' está vencida ({vacuna.fecha_vencimiento:%d/%m/%Y})",
+                )
+            if Decimal(str(vacuna.stock_cantidad or 0)) < Decimal("1"):
+                return CrearVacunacion(
+                    success=False,
+                    message=f"Stock insuficiente de la vacuna '{vacuna.nombre}' (disponible: {vacuna.stock_cantidad})",
+                )
+
+            # --- No duplicar misma vacuna/animal/fecha ---
+            if Vacunacion.objects.filter(
+                animal=animal, vacuna=vacuna, fecha_aplicacion=fecha_aplicacion
+            ).exists():
+                return CrearVacunacion(
+                    success=False,
+                    message="Ya existe una vacunación de esta vacuna para este animal en la misma fecha",
+                )
+
+            # --- Autocompletado desde el catálogo de la vacuna ---
+            dosis_aplicada = kwargs.get('dosis_aplicada') or vacuna.dosis_recomendada
+            via_aplicacion = kwargs.get('via_aplicacion') or vacuna.via_aplicacion
 
             fecha_proxima = kwargs.get('fecha_proxima')
             if not fecha_proxima and vacuna.intervalo_dias:
                 fecha_proxima = fecha_aplicacion + timedelta(days=vacuna.intervalo_dias)
 
-            vacunacion = Vacunacion.objects.create(
-                finca=finca,
-                animal=animal,
-                vacuna=vacuna,
-                fecha_aplicacion=fecha_aplicacion,
-                campana=kwargs.get('campana'),
-                lote=kwargs.get('lote'),
-                dosis_aplicada=kwargs.get('dosis_aplicada'),
-                via_aplicacion=kwargs.get('via_aplicacion'),
-                observaciones=kwargs.get('observaciones'),
-                fecha_proxima=fecha_proxima
-            )
+            # --- Advertencia de edad mínima (no bloqueante) ---
+            advertencia = None
+            edad = _edad_meses(animal, fecha_aplicacion)
+            if edad is not None and vacuna.edad_minima_meses and edad < vacuna.edad_minima_meses:
+                advertencia = (
+                    f"El animal tiene {edad} mes(es) y la vacuna requiere una edad mínima de "
+                    f"{vacuna.edad_minima_meses}. Se registró igualmente."
+                )
 
-            return CrearVacunacion(vacunacion=vacunacion, success=True, message="Vacunación registrada exitosamente")
+            with transaction.atomic():
+                usuario = info.context.user
+                vacunacion = Vacunacion.objects.create(
+                    finca=finca,
+                    animal=animal,
+                    vacuna=vacuna,
+                    veterinario=veterinario,
+                    fecha_aplicacion=fecha_aplicacion,
+                    campana=kwargs.get('campana'),
+                    lote=kwargs.get('lote'),
+                    dosis_aplicada=dosis_aplicada,
+                    via_aplicacion=via_aplicacion,
+                    observaciones=kwargs.get('observaciones'),
+                    fecha_proxima=fecha_proxima,
+                    registrado_por=usuario if getattr(usuario, "is_authenticated", False) else None,
+                )
+
+                # --- Descontar stock (sin quedar negativo) ---
+                vacuna.stock_cantidad = Decimal(str(vacuna.stock_cantidad or 0)) - Decimal("1")
+                vacuna.save(update_fields=["stock_cantidad", "updated_at"])
+
+                # --- Alertas ---
+                _generar_alerta_vacuna_proxima(vacunacion)
+                _generar_alerta_stock_bajo(vacuna, finca)
+
+            mensaje = "Vacunación registrada exitosamente"
+            if advertencia:
+                mensaje += f". Advertencia: {advertencia}"
+            return CrearVacunacion(
+                vacunacion=vacunacion, success=True, message=mensaje, advertencia=advertencia
+            )
+        except Finca.DoesNotExist:
+            return CrearVacunacion(success=False, message="Finca no encontrada")
         except Exception as e:
             return CrearVacunacion(vacunacion=None, success=False, message=str(e))
 
@@ -782,6 +1004,114 @@ class FinalizarTiempoRetiro(graphene.Mutation):
 # MUTATIONS DE ACTUALIZACIÓN Y ELIMINACIÓN
 # ==========================================
 
+# ===== VACUNACIONES =====
+class ActualizarVacunacion(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        fecha_aplicacion = graphene.Date()
+        veterinario_id = graphene.ID()
+        campana = graphene.String()
+        lote = graphene.String()
+        dosis_aplicada = graphene.String()
+        via_aplicacion = graphene.String()
+        observaciones = graphene.String()
+        fecha_proxima = graphene.Date()
+
+    vacunacion = graphene.Field(VacunacionType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            from catalogos.models import Veterinario
+
+            vacunacion = Vacunacion.objects.get(id=id)
+
+            recalcular = False
+            if kwargs.get('fecha_aplicacion') is not None:
+                vacunacion.fecha_aplicacion = kwargs['fecha_aplicacion']
+                recalcular = True
+            if 'veterinario_id' in kwargs:
+                vet_id = kwargs.get('veterinario_id')
+                if vet_id:
+                    try:
+                        vacunacion.veterinario = Veterinario.objects.get(
+                            id=vet_id, finca=vacunacion.finca
+                        )
+                    except Veterinario.DoesNotExist:
+                        return ActualizarVacunacion(
+                            vacunacion=None, success=False,
+                            message="El veterinario no pertenece a la finca activa",
+                        )
+                else:
+                    vacunacion.veterinario = None
+            if kwargs.get('campana') is not None:
+                vacunacion.campana = kwargs['campana']
+            if kwargs.get('lote') is not None:
+                vacunacion.lote = kwargs['lote']
+            if kwargs.get('dosis_aplicada') is not None:
+                vacunacion.dosis_aplicada = kwargs['dosis_aplicada']
+            if kwargs.get('via_aplicacion') is not None:
+                vacunacion.via_aplicacion = kwargs['via_aplicacion']
+            if kwargs.get('observaciones') is not None:
+                vacunacion.observaciones = kwargs['observaciones']
+
+            if kwargs.get('fecha_proxima') is not None:
+                vacunacion.fecha_proxima = kwargs['fecha_proxima']
+            elif recalcular and vacunacion.vacuna and vacunacion.vacuna.intervalo_dias:
+                vacunacion.fecha_proxima = vacunacion.fecha_aplicacion + timedelta(
+                    days=vacunacion.vacuna.intervalo_dias
+                )
+
+            vacunacion.save()
+            _generar_alerta_vacuna_proxima(vacunacion)
+            return ActualizarVacunacion(
+                vacunacion=vacunacion, success=True, message="Vacunación actualizada exitosamente"
+            )
+        except Vacunacion.DoesNotExist:
+            return ActualizarVacunacion(vacunacion=None, success=False, message="Vacunación no encontrada")
+        except Exception as e:
+            return ActualizarVacunacion(vacunacion=None, success=False, message=str(e))
+
+
+class EliminarVacunacion(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            from alertas.models import Alerta
+
+            vacunacion = Vacunacion.objects.get(id=id)
+            vacuna = vacunacion.vacuna
+
+            with transaction.atomic():
+                # Devolver la unidad descontada al stock de la vacuna.
+                if vacuna is not None:
+                    vacuna.stock_cantidad = Decimal(str(vacuna.stock_cantidad or 0)) + Decimal("1")
+                    vacuna.save(update_fields=["stock_cantidad", "updated_at"])
+
+                # Limpiar la alerta de próxima dosis asociada.
+                Alerta.objects.filter(
+                    tipo="VACUNA_PROXIMA",
+                    referencia_tipo="Vacunacion",
+                    referencia_id=vacunacion.id,
+                ).delete()
+
+                vacunacion.delete()
+
+            return EliminarVacunacion(success=True, message="Vacunación eliminada exitosamente")
+        except Vacunacion.DoesNotExist:
+            return EliminarVacunacion(success=False, message="Vacunación no encontrada")
+        except Exception as e:
+            return EliminarVacunacion(success=False, message=str(e))
+
+
 # ===== TRATAMIENTOS =====
 class ActualizarTratamiento(graphene.Mutation):
     class Arguments:
@@ -1124,6 +1454,8 @@ class EliminarTiempoRetiro(graphene.Mutation):
 class Mutation(graphene.ObjectType):
     # Mutations existentes
     crear_vacunacion = CrearVacunacion.Field()
+    actualizar_vacunacion = ActualizarVacunacion.Field()
+    eliminar_vacunacion = EliminarVacunacion.Field()
     crear_tratamiento = CrearTratamiento.Field()
     finalizar_tratamiento = FinalizarTratamiento.Field()
     crear_desparasitacion = CrearDesparasitacion.Field()

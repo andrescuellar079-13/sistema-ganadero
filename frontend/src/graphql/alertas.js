@@ -5,20 +5,30 @@ import { gql } from '@apollo/client'
 // QUERIES
 // ==========================================
 
+const ALERTA_FIELDS = `
+  id
+  tipo
+  mensaje
+  fechaAlerta
+  diasRestantes
+  leida
+  prioridad
+  estado
+  moduloOrigen
+  fechaVencimiento
+  accionRecomendada
+  vencida
+  animal {
+    id
+    nroArete
+    nombre
+  }
+`
+
 export const GET_ALERTAS = gql`
-  query GetAlertas($fincaId: ID!) {
-    alertas(fincaId: $fincaId) {
-      id
-      tipo
-      mensaje
-      fechaAlerta
-      diasRestantes
-      leida
-      animal {
-        id
-        nroArete
-        nombre
-      }
+  query GetAlertas($fincaId: ID!, $estado: String, $prioridad: String, $moduloOrigen: String, $tipo: String) {
+    alertas(fincaId: $fincaId, estado: $estado, prioridad: $prioridad, moduloOrigen: $moduloOrigen, tipo: $tipo) {
+      ${ALERTA_FIELDS}
     }
   }
 `
@@ -26,16 +36,18 @@ export const GET_ALERTAS = gql`
 export const GET_ALERTAS_PENDIENTES = gql`
   query GetAlertasPendientes($fincaId: ID!) {
     alertasPendientes(fincaId: $fincaId) {
-      id
-      tipo
-      mensaje
-      fechaAlerta
-      diasRestantes
-      animal {
-        id
-        nroArete
-        nombre
-      }
+      ${ALERTA_FIELDS}
+    }
+  }
+`
+
+export const GET_RESUMEN_ALERTAS = gql`
+  query GetResumenAlertas($fincaId: ID!) {
+    resumenAlertas(fincaId: $fincaId) {
+      pendientes
+      criticas
+      vencidas
+      resueltas
     }
   }
 `
@@ -50,6 +62,11 @@ export const GET_GASTOS = gql`
       precioUnitario
       total
       fecha
+      centroCosto
+      metodoPago
+      proveedor
+      comprobante
+      observaciones
       animal {
         id
         nroArete
@@ -97,6 +114,12 @@ export const CREATE_GASTO = gql`
     $cantidad: Float!
     $precioUnitario: Float!
     $animalId: ID
+    $centroCosto: String
+    $metodoPago: String
+    $parcelaId: ID
+    $proveedor: String
+    $comprobante: String
+    $observaciones: String
   ) {
     crearGasto(
       fincaId: $fincaId
@@ -106,6 +129,12 @@ export const CREATE_GASTO = gql`
       cantidad: $cantidad
       precioUnitario: $precioUnitario
       animalId: $animalId
+      centroCosto: $centroCosto
+      metodoPago: $metodoPago
+      parcelaId: $parcelaId
+      proveedor: $proveedor
+      comprobante: $comprobante
+      observaciones: $observaciones
     ) {
       gasto {
         id
@@ -127,6 +156,12 @@ export const UPDATE_GASTO = gql`
     $cantidad: Float
     $precioUnitario: Float
     $animalId: ID
+    $centroCosto: String
+    $metodoPago: String
+    $parcelaId: ID
+    $proveedor: String
+    $comprobante: String
+    $observaciones: String
   ) {
     actualizarGasto(
       id: $id
@@ -136,6 +171,12 @@ export const UPDATE_GASTO = gql`
       cantidad: $cantidad
       precioUnitario: $precioUnitario
       animalId: $animalId
+      centroCosto: $centroCosto
+      metodoPago: $metodoPago
+      parcelaId: $parcelaId
+      proveedor: $proveedor
+      comprobante: $comprobante
+      observaciones: $observaciones
     ) {
       gasto {
         id
@@ -145,6 +186,11 @@ export const UPDATE_GASTO = gql`
         cantidad
         precioUnitario
         total
+        centroCosto
+        metodoPago
+        proveedor
+        comprobante
+        observaciones
         animal {
           id
           nroArete
@@ -178,6 +224,9 @@ export const CREATE_ALERTA = gql`
     $fechaAlerta: Date!
     $diasRestantes: Int
     $animalId: ID
+    $prioridad: String
+    $moduloOrigen: String
+    $accionRecomendada: String
   ) {
     crearAlerta(
       fincaId: $fincaId
@@ -186,6 +235,9 @@ export const CREATE_ALERTA = gql`
       fechaAlerta: $fechaAlerta
       diasRestantes: $diasRestantes
       animalId: $animalId
+      prioridad: $prioridad
+      moduloOrigen: $moduloOrigen
+      accionRecomendada: $accionRecomendada
     ) {
       alerta {
         id
@@ -206,11 +258,54 @@ export const MARCAR_ALERTA_LEIDA = gql`
   }
 `
 
+export const MARCAR_ALERTA_EN_PROCESO = gql`
+  mutation MarcarAlertaEnProceso($id: ID!) {
+    marcarAlertaEnProceso(id: $id) {
+      success
+      message
+    }
+  }
+`
+
+export const RESOLVER_ALERTA = gql`
+  mutation ResolverAlerta($id: ID!, $observacion: String) {
+    resolverAlerta(id: $id, observacion: $observacion) {
+      success
+      message
+    }
+  }
+`
+
+export const DESCARTAR_ALERTA = gql`
+  mutation DescartarAlerta($id: ID!, $observacion: String) {
+    descartarAlerta(id: $id, observacion: $observacion) {
+      success
+      message
+    }
+  }
+`
+
 export const DELETE_ALERTA = gql`
   mutation EliminarAlerta($id: ID!) {
     eliminarAlerta(id: $id) {
       success
       message
+    }
+  }
+`
+
+export const GENERAR_ALERTAS_AUTOMATICAS = gql`
+  mutation GenerarAlertasAutomaticas($fincaId: ID!) {
+    generarAlertasAutomaticas(fincaId: $fincaId) {
+      success
+      total
+      vacunasProximas
+      vacunasVencidas
+      partosProximos
+      stockBajoMedicamento
+      stockBajoAlimento
+      pesajesPendientes
+      transferenciasPendientes
     }
   }
 `

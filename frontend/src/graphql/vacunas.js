@@ -10,11 +10,21 @@ export const GET_VACUNAS = gql`
       id
       nombre
       descripcion
+      enfermedadPreviene
+      laboratorio
       dosisRecomendada
       viaAplicacion
       intervaloDias
       edadMinimaMeses
+      sexoAplicable
+      tipoProduccionAplicable
+      stockCantidad
+      stockMinimo
+      lote
+      fechaVencimiento
       activo
+      isStockBajo
+      isVencida
     }
   }
 `

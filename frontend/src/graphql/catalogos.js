@@ -156,15 +156,23 @@ export const GET_VACUNAS = gql`
       nombre
       descripcion
       enfermedadPreviene
+      laboratorio
       dosisRecomendada
       viaAplicacion
       intervaloDias
       edadMinimaMeses
+      requiereRefuerzo
+      diasAnticipacionAlerta
+      sexoAplicable
+      tipoProduccionAplicable
       stockCantidad
       stockMinimo
       lote
       fechaVencimiento
+      observacionesTecnicas
       activo
+      isStockBajo
+      isVencida
       createdAt
       updatedAt
     }
@@ -763,28 +771,40 @@ export const CREATE_VACUNA = gql`
     $nombre: String!
     $descripcion: String
     $enfermedadPreviene: String
+    $laboratorio: String
     $dosisRecomendada: String!
     $viaAplicacion: String!
     $intervaloDias: Int
     $edadMinimaMeses: Int
+    $requiereRefuerzo: Boolean
+    $diasAnticipacionAlerta: Int
+    $sexoAplicable: String
+    $tipoProduccionAplicable: String
     $stockCantidad: Decimal
     $stockMinimo: Decimal
     $lote: String
     $fechaVencimiento: Date
+    $observacionesTecnicas: String
   ) {
     crearVacuna(
       fincaId: $fincaId
       nombre: $nombre
       descripcion: $descripcion
       enfermedadPreviene: $enfermedadPreviene
+      laboratorio: $laboratorio
       dosisRecomendada: $dosisRecomendada
       viaAplicacion: $viaAplicacion
       intervaloDias: $intervaloDias
       edadMinimaMeses: $edadMinimaMeses
+      requiereRefuerzo: $requiereRefuerzo
+      diasAnticipacionAlerta: $diasAnticipacionAlerta
+      sexoAplicable: $sexoAplicable
+      tipoProduccionAplicable: $tipoProduccionAplicable
       stockCantidad: $stockCantidad
       stockMinimo: $stockMinimo
       lote: $lote
       fechaVencimiento: $fechaVencimiento
+      observacionesTecnicas: $observacionesTecnicas
     ) {
       vacuna {
         id
@@ -802,14 +822,20 @@ export const UPDATE_VACUNA = gql`
     $nombre: String
     $descripcion: String
     $enfermedadPreviene: String
+    $laboratorio: String
     $dosisRecomendada: String
     $viaAplicacion: String
     $intervaloDias: Int
     $edadMinimaMeses: Int
+    $requiereRefuerzo: Boolean
+    $diasAnticipacionAlerta: Int
+    $sexoAplicable: String
+    $tipoProduccionAplicable: String
     $stockCantidad: Decimal
     $stockMinimo: Decimal
     $lote: String
     $fechaVencimiento: Date
+    $observacionesTecnicas: String
     $activo: Boolean
   ) {
     actualizarVacuna(
@@ -817,14 +843,20 @@ export const UPDATE_VACUNA = gql`
       nombre: $nombre
       descripcion: $descripcion
       enfermedadPreviene: $enfermedadPreviene
+      laboratorio: $laboratorio
       dosisRecomendada: $dosisRecomendada
       viaAplicacion: $viaAplicacion
       intervaloDias: $intervaloDias
       edadMinimaMeses: $edadMinimaMeses
+      requiereRefuerzo: $requiereRefuerzo
+      diasAnticipacionAlerta: $diasAnticipacionAlerta
+      sexoAplicable: $sexoAplicable
+      tipoProduccionAplicable: $tipoProduccionAplicable
       stockCantidad: $stockCantidad
       stockMinimo: $stockMinimo
       lote: $lote
       fechaVencimiento: $fechaVencimiento
+      observacionesTecnicas: $observacionesTecnicas
       activo: $activo
     ) {
       vacuna {

@@ -1,21 +1,31 @@
 // frontend/src/components/GastoForm.jsx
 import React, { useState } from 'react'
 import { useAnimales } from '../hooks/useAnimales'
+import { useParcelas } from '../hooks/useParcelas'
 import { useAlertas } from '../hooks/useAlertas'
+
+const EMPTY = {
+  fecha: new Date().toISOString().split('T')[0],
+  tipoGasto: 'OTRO',
+  descripcion: '',
+  cantidad: 1,
+  precioUnitario: '',
+  animalId: '',
+  centroCosto: '',
+  metodoPago: '',
+  parcelaId: '',
+  proveedor: '',
+  comprobante: '',
+  observaciones: '',
+}
 
 const GastoForm = ({ onSuccess }) => {
   const { animales } = useAnimales()
+  const { parcelas } = useParcelas()
   const { crearGasto } = useAlertas()
 
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split('T')[0],
-    tipoGasto: 'OTRO',
-    descripcion: '',
-    cantidad: 1,
-    precioUnitario: '',
-    animalId: ''
-  })
+  const [formData, setFormData] = useState(EMPTY)
 
   const tiposGasto = [
     { value: 'SANIDAD', label: '🩺 Sanidad' },
@@ -28,6 +38,26 @@ const GastoForm = ({ onSuccess }) => {
     { value: 'OTRO', label: '📋 Otro' },
   ]
 
+  const centrosCosto = [
+    { value: 'SANIDAD', label: 'Sanidad' },
+    { value: 'REPRODUCCION', label: 'Reproducción' },
+    { value: 'ALIMENTACION', label: 'Alimentación' },
+    { value: 'MANO_DE_OBRA', label: 'Mano de obra' },
+    { value: 'PARCELA', label: 'Parcela' },
+    { value: 'FINCA', label: 'Finca' },
+    { value: 'COMERCIO', label: 'Comercio' },
+    { value: 'OTRO', label: 'Otro' },
+  ]
+
+  const metodosPago = [
+    { value: 'EFECTIVO', label: 'Efectivo' },
+    { value: 'TRANSFERENCIA', label: 'Transferencia' },
+    { value: 'CREDITO', label: 'Crédito' },
+    { value: 'OTRO', label: 'Otro' },
+  ]
+
+  const set = (field) => (e) => setFormData({ ...formData, [field]: e.target.value })
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -38,19 +68,18 @@ const GastoForm = ({ onSuccess }) => {
       descripcion: formData.descripcion,
       cantidad: parseFloat(formData.cantidad),
       precioUnitario: parseFloat(formData.precioUnitario),
-      animalId: formData.animalId || null
+      animalId: formData.animalId || null,
+      centroCosto: formData.centroCosto || null,
+      metodoPago: formData.metodoPago || null,
+      parcelaId: formData.parcelaId || null,
+      proveedor: formData.proveedor || null,
+      comprobante: formData.comprobante || null,
+      observaciones: formData.observaciones || null,
     })
 
     if (result.success) {
       alert('✅ Gasto registrado exitosamente')
-      setFormData({
-        fecha: new Date().toISOString().split('T')[0],
-        tipoGasto: 'OTRO',
-        descripcion: '',
-        cantidad: 1,
-        precioUnitario: '',
-        animalId: ''
-      })
+      setFormData(EMPTY)
       if (onSuccess) onSuccess()
     } else {
       alert(`❌ Error: ${result.error}`)
@@ -69,7 +98,7 @@ const GastoForm = ({ onSuccess }) => {
             type="date"
             required
             value={formData.fecha}
-            onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+            onChange={set('fecha')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
           />
         </div>
@@ -78,7 +107,7 @@ const GastoForm = ({ onSuccess }) => {
           <select
             required
             value={formData.tipoGasto}
-            onChange={(e) => setFormData({ ...formData, tipoGasto: e.target.value })}
+            onChange={set('tipoGasto')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
           >
             {tiposGasto.map(t => (
@@ -93,7 +122,7 @@ const GastoForm = ({ onSuccess }) => {
         <textarea
           required
           value={formData.descripcion}
-          onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+          onChange={set('descripcion')}
           rows="2"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
           placeholder="Ej: Compra de vacunas, Consulta veterinaria, etc."
@@ -107,7 +136,7 @@ const GastoForm = ({ onSuccess }) => {
             type="number"
             step="1"
             value={formData.cantidad}
-            onChange={(e) => setFormData({ ...formData, cantidad: e.target.value })}
+            onChange={set('cantidad')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
           />
         </div>
@@ -118,24 +147,102 @@ const GastoForm = ({ onSuccess }) => {
             step="0.01"
             required
             value={formData.precioUnitario}
-            onChange={(e) => setFormData({ ...formData, precioUnitario: e.target.value })}
+            onChange={set('precioUnitario')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
           />
         </div>
       </div>
 
+      {/* Campos opcionales adicionales */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Centro de costo</label>
+          <select
+            value={formData.centroCosto}
+            onChange={set('centroCosto')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+          >
+            <option value="">— Sin asignar —</option>
+            {centrosCosto.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Método de pago</label>
+          <select
+            value={formData.metodoPago}
+            onChange={set('metodoPago')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+          >
+            <option value="">— Sin asignar —</option>
+            {metodosPago.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Proveedor (opcional)</label>
+          <input
+            type="text"
+            value={formData.proveedor}
+            onChange={set('proveedor')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+            placeholder="Nombre del proveedor"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">N° comprobante (opcional)</label>
+          <input
+            type="text"
+            value={formData.comprobante}
+            onChange={set('comprobante')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+            placeholder="Factura / recibo"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Animal (opcional)</label>
+          <select
+            value={formData.animalId}
+            onChange={set('animalId')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+          >
+            <option value="">Seleccionar animal</option>
+            {animales.map(a => (
+              <option key={a.id} value={a.id}>{a.nroArete} - {a.nombre || 'Sin nombre'}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Parcela (opcional)</label>
+          <select
+            value={formData.parcelaId}
+            onChange={set('parcelaId')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+          >
+            <option value="">Seleccionar parcela</option>
+            {parcelas.map(p => (
+              <option key={p.id} value={p.id}>{p.nombre}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700">Animal (opcional)</label>
-        <select
-          value={formData.animalId}
-          onChange={(e) => setFormData({ ...formData, animalId: e.target.value })}
+        <label className="block text-sm font-medium text-gray-700">Observaciones (opcional)</label>
+        <textarea
+          value={formData.observaciones}
+          onChange={set('observaciones')}
+          rows="2"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-        >
-          <option value="">Seleccionar animal</option>
-          {animales.map(a => (
-            <option key={a.id} value={a.id}>{a.nroArete} - {a.nombre || 'Sin nombre'}</option>
-          ))}
-        </select>
+        />
       </div>
 
       <button

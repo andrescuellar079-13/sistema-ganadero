@@ -7,11 +7,16 @@ import {
   GET_PRODUCCIONES_HOY,
   GET_REGISTROS_PESO,
   GET_PRODUCCION_TOTAL_HOY,
+  GET_RESUMEN_PRODUCCION,
+  GET_ANIMALES_PRODUCCION,
   GET_TOP_5_VACAS_PRODUCCION,  // 👈 Corregido: GET_TOP_5_VACAS_PRODUCCION
+  GET_ENGORDES_ACTIVOS,
   CREATE_LACTANCIA,
   SECAR_LACTANCIA,
   CREATE_PRODUCCION_LECHE,
   CREATE_REGISTRO_PESO,
+  INICIAR_ENGORDE,
+  CAMBIAR_ESTADO_ENGORDE,
 } from '../graphql/produccion'
 
 export const useProduccion = () => {
@@ -37,8 +42,27 @@ export const useProduccion = () => {
   const { data: produccionTotalHoy } = useQuery(GET_PRODUCCION_TOTAL_HOY, {
     variables: { fincaId }
   })
-  
+
+  // Resumen consolidado de producción (fuente única de los KPIs del módulo)
+  const { data: resumenProduccion } = useQuery(GET_RESUMEN_PRODUCCION, {
+    variables: { fincaId }
+  })
+
   const { data: top5Vacas } = useQuery(GET_TOP_5_VACAS_PRODUCCION, {  // 👈 Corregido aquí también
+    variables: { fincaId }
+  })
+
+  const { data: animalesProduccion, loading: loadingAnimales } = useQuery(GET_ANIMALES_PRODUCCION, {
+    variables: { fincaId }
+  })
+
+  // Engordes activos (carne / engorde)
+  const { data: engordesData, loading: loadingEngordes, refetch: refetchEngordes } = useQuery(GET_ENGORDES_ACTIVOS, {
+    variables: { fincaId }
+  })
+
+  // Registros de peso (para reportes de pesajes / ganancia)
+  const { data: registrosPesoData, refetch: refetchRegistrosPeso } = useQuery(GET_REGISTROS_PESO, {
     variables: { fincaId }
   })
 
@@ -47,6 +71,8 @@ export const useProduccion = () => {
   const [secarLactanciaMutation] = useMutation(SECAR_LACTANCIA)
   const [crearProduccionMutation] = useMutation(CREATE_PRODUCCION_LECHE)
   const [crearRegistroPesoMutation] = useMutation(CREATE_REGISTRO_PESO)
+  const [iniciarEngordeMutation] = useMutation(INICIAR_ENGORDE)
+  const [cambiarEstadoEngordeMutation] = useMutation(CAMBIAR_ESTADO_ENGORDE)
 
   const crearLactancia = async (variables) => {
     try {
@@ -92,7 +118,41 @@ export const useProduccion = () => {
       const { data } = await crearRegistroPesoMutation({
         variables: { fincaId, ...variables }
       })
+      // El pesaje alimenta el control de engorde y el peso actual del animal
+      await Promise.all([refetchRegistrosPeso(), refetchEngordes()])
       return { success: true, data: data?.crearRegistroPeso }
+    } catch (error) {
+      return { success: false, error: error.message }
+    }
+  }
+
+  const iniciarEngorde = async (variables) => {
+    try {
+      const { data } = await iniciarEngordeMutation({
+        variables: { fincaId, ...variables }
+      })
+      await refetchEngordes()
+      return {
+        success: data?.iniciarEngorde?.success ?? false,
+        message: data?.iniciarEngorde?.message,
+        data: data?.iniciarEngorde,
+      }
+    } catch (error) {
+      return { success: false, error: error.message }
+    }
+  }
+
+  const cambiarEstadoEngorde = async (id, estado) => {
+    try {
+      const { data } = await cambiarEstadoEngordeMutation({
+        variables: { id, estado }
+      })
+      await refetchEngordes()
+      return {
+        success: data?.cambiarEstadoEngorde?.success ?? false,
+        message: data?.cambiarEstadoEngorde?.message,
+        data: data?.cambiarEstadoEngorde,
+      }
     } catch (error) {
       return { success: false, error: error.message }
     }
@@ -105,20 +165,27 @@ export const useProduccion = () => {
     producciones: producciones?.produccionesLeche || [],
     produccionesHoy: produccionesHoy?.produccionesHoy || [],
     produccionTotalHoy: produccionTotalHoy?.produccionTotalHoy || 0,
+    resumen: resumenProduccion?.resumenProduccion || null,
     top5Vacas: top5Vacas?.top5VacasProduccion || [],
-    
+    animalesProduccion: animalesProduccion?.animalesActivos || [],
+    engordesActivos: engordesData?.engordesActivos || [],
+    registrosPeso: registrosPesoData?.registrosPeso || [],
+
     // Loading
-    loading: loadingLactancias || loadingActivas || loadingProducciones || loadingHoy,
-    
+    loading: loadingLactancias || loadingActivas || loadingProducciones || loadingHoy || loadingAnimales || loadingEngordes,
+
     // Functions
     crearLactancia,
     secarLactancia,
     crearProduccion,
     crearRegistroPeso,
-    
+    iniciarEngorde,
+    cambiarEstadoEngorde,
+
     // Refetch
     refetchLactancias,
     refetchProducciones,
     refetchHoy,
+    refetchEngordes,
   }
 }

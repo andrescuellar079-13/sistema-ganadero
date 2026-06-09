@@ -282,6 +282,93 @@ export const generarReporteAnimalesExcel = (items, columnas, config = {}) => {
   saveAs(blob, `reporte_animales_${fechaArchivo}.xlsx`)
 }
 
+// ==========================================
+// REPORTES GENÉRICOS REUTILIZABLES
+// (usados por ReportModalReusable — recibe filas/encabezados ya formateados)
+// ==========================================
+
+export const generarReporteGenericoPDF = (filas, encabezados, config = {}) => {
+  const {
+    titulo = 'Reporte',
+    subtitulo = '',
+    nombreArchivo = 'reporte',
+    fechaGeneracion = new Date().toLocaleString('es-PY'),
+    columnasAnchas = [],
+  } = config
+
+  const orientacion = encabezados.length > 8 ? 'landscape' : 'portrait'
+  const doc = new jsPDF(orientacion)
+
+  let y = 15
+  doc.setFontSize(16)
+  doc.setFont(undefined, 'bold')
+  doc.text(titulo, 14, y)
+  y += 8
+
+  if (subtitulo) {
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'normal')
+    doc.text(subtitulo, 14, y)
+    y += 6
+  }
+
+  doc.setFontSize(9)
+  doc.setFont(undefined, 'normal')
+  doc.text(`Generado: ${fechaGeneracion}`, 14, y)
+  y += 5
+  doc.text(`Total de registros: ${filas.length}`, 14, y)
+  y += 4
+
+  autoTable(doc, {
+    head: [encabezados],
+    body: filas,
+    startY: y + 4,
+    theme: 'striped',
+    headStyles: { fillColor: [34, 197, 94], fontSize: 8, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 7.5 },
+    alternateRowStyles: { fillColor: [245, 251, 245] },
+    margin: { left: 10, right: 10 },
+    styles: { overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: encabezados.reduce((acc, label, i) => {
+      if (columnasAnchas.includes(label)) acc[i] = { cellWidth: 35 }
+      return acc
+    }, {}),
+  })
+
+  const fechaArchivo = new Date().toISOString().split('T')[0]
+  doc.save(`${nombreArchivo}_${fechaArchivo}.pdf`)
+}
+
+export const generarReporteGenericoExcel = (filas, encabezados, config = {}) => {
+  const {
+    titulo = 'Reporte',
+    subtitulo = '',
+    nombreArchivo = 'reporte',
+    sheetName = 'Reporte',
+    fechaGeneracion = new Date().toLocaleString('es-PY'),
+  } = config
+
+  const datos = []
+  datos.push([titulo])
+  if (subtitulo) datos.push([subtitulo])
+  datos.push([`Generado: ${fechaGeneracion}`])
+  datos.push([`Total de registros: ${filas.length}`])
+  datos.push([])
+  datos.push(encabezados)
+  filas.forEach(f => datos.push(f))
+
+  const ws = XLSX.utils.aoa_to_sheet(datos)
+  ws['!cols'] = encabezados.map(() => ({ wch: 20 }))
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, String(sheetName).slice(0, 31))
+
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([buf], { type: 'application/octet-stream' })
+  const fechaArchivo = new Date().toISOString().split('T')[0]
+  saveAs(blob, `${nombreArchivo}_${fechaArchivo}.xlsx`)
+}
+
 export const generarExcelProduccion = (producciones, fincaNombre) => {
   const data = producciones.map(p => ({
     'Fecha': new Date(p.fecha).toLocaleDateString(),

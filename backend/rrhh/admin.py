@@ -10,6 +10,9 @@ class TipoEmpleadoAdmin(admin.ModelAdmin):
 
 @admin.register(Empleado)
 class EmpleadoAdmin(admin.ModelAdmin):
-    list_display = ['nombre', 'apellidos', 'tipo', 'ci', 'telefono', 'estado']
+    list_display = ['nombre', 'apellidos', 'tipo', 'tipo_empleado', 'finca',
+                    'ci', 'telefono', 'salario', 'estado_laboral']
     search_fields = ['nombre', 'apellidos', 'ci']
-    list_filter = ['tipo', 'estado', 'sexo']
+    list_filter = ['finca', 'tipo', 'tipo_empleado', 'estado_laboral', 'sexo']
+    autocomplete_fields = []
+    raw_id_fields = ['usuario']

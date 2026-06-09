@@ -1,78 +1,204 @@
 // frontend/src/components/AlertaCard.jsx
-import React from 'react'
+import { useState } from 'react'
+import {
+  Card, CardContent, Box, Typography, Chip, IconButton, Tooltip,
+  Menu, MenuItem, ListItemIcon, ListItemText, Dialog, DialogTitle,
+  DialogContent, DialogActions, Button, TextField,
+} from '@mui/material'
+import MoreVertIcon            from '@mui/icons-material/MoreVert'
+import DoneOutlinedIcon        from '@mui/icons-material/DoneOutlined'
+import PendingActionsOutlinedIcon from '@mui/icons-material/PendingActionsOutlined'
+import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
+import BlockOutlinedIcon       from '@mui/icons-material/BlockOutlined'
+import DeleteOutlinedIcon      from '@mui/icons-material/DeleteOutlined'
 
-const AlertaCard = ({ alerta, onMarcarLeida, onEliminar }) => {
-  const getColorByTipo = (tipo) => {
-    const colores = {
-      'VACUNA_PROXIMA': 'bg-yellow-100 border-yellow-500 text-yellow-800',
-      'VACUNA_VENCIDA': 'bg-red-100 border-red-500 text-red-800',
-      'PARTO_PROXIMO': 'bg-blue-100 border-blue-500 text-blue-800',
-      'STOCK_BAJO_MEDICAMENTO': 'bg-orange-100 border-orange-500 text-orange-800',
-      'STOCK_BAJO_ALIMENTO': 'bg-orange-100 border-orange-500 text-orange-800',
-      'PESAJE_PENDIENTE': 'bg-purple-100 border-purple-500 text-purple-800',
-      'OTRO': 'bg-gray-100 border-gray-500 text-gray-800',
-    }
-    return colores[tipo] || colores['OTRO']
-  }
+const ICONO_TIPO = {
+  VACUNA_PROXIMA: '💉',
+  VACUNA_VENCIDA: '⚠️',
+  PARTO_PROXIMO: '🤰',
+  STOCK_BAJO_MEDICAMENTO: '💊',
+  STOCK_BAJO_ALIMENTO: '🌾',
+  PESAJE_PENDIENTE: '⚖️',
+  TRANSFERENCIA_PENDIENTE: '🔁',
+  OTRO: '📢',
+}
 
-  const getIconoByTipo = (tipo) => {
-    const iconos = {
-      'VACUNA_PROXIMA': '💉',
-      'VACUNA_VENCIDA': '⚠️',
-      'PARTO_PROXIMO': '🤰',
-      'STOCK_BAJO_MEDICAMENTO': '💊',
-      'STOCK_BAJO_ALIMENTO': '🍖',
-      'PESAJE_PENDIENTE': '⚖️',
-      'OTRO': '📢',
-    }
-    return iconos[tipo] || '🔔'
-  }
+const COLOR_PRIORIDAD = {
+  BAJA:    { bg: '#F1F5F9', color: '#475569', accent: '#94A3B8' },
+  MEDIA:   { bg: '#E3F2FD', color: '#1565C0', accent: '#1976D2' },
+  ALTA:    { bg: '#FFF3E0', color: '#E65100', accent: '#FB8C00' },
+  CRITICA: { bg: '#FFEBEE', color: '#C62828', accent: '#E53935' },
+}
 
-  const formatearFecha = (fecha) => {
-    if (!fecha) return 'Fecha no disponible'
-    return new Date(fecha).toLocaleDateString()
+const COLOR_ESTADO = {
+  PENDIENTE:  'warning',
+  LEIDA:      'info',
+  EN_PROCESO: 'primary',
+  RESUELTA:   'success',
+  DESCARTADA: 'default',
+}
+
+const LABEL_ESTADO = {
+  PENDIENTE: 'Pendiente',
+  LEIDA: 'Leída',
+  EN_PROCESO: 'En proceso',
+  RESUELTA: 'Resuelta',
+  DESCARTADA: 'Descartada',
+}
+
+const formatearFecha = (fecha) => {
+  if (!fecha) return 'Sin fecha'
+  return new Date(fecha).toLocaleDateString('es-PY')
+}
+
+export default function AlertaCard({ alerta, onMarcarLeida, onEnProceso, onResolver, onDescartar, onEliminar }) {
+  const [anchorEl, setAnchorEl] = useState(null)
+  const [dialog, setDialog]     = useState(null) // 'resolver' | 'descartar' | null
+  const [observacion, setObservacion] = useState('')
+
+  const prioridad = alerta.prioridad || 'MEDIA'
+  const estado    = alerta.estado || 'PENDIENTE'
+  const pr        = COLOR_PRIORIDAD[prioridad] || COLOR_PRIORIDAD.MEDIA
+  const cerrada   = estado === 'RESUELTA' || estado === 'DESCARTADA'
+
+  const openMenu  = (e) => setAnchorEl(e.currentTarget)
+  const closeMenu = () => setAnchorEl(null)
+
+  const abrirDialog = (tipo) => { setObservacion(''); setDialog(tipo); closeMenu() }
+
+  const confirmarDialog = () => {
+    if (dialog === 'resolver') onResolver(alerta.id, observacion || null)
+    if (dialog === 'descartar') onDescartar(alerta.id, observacion || null)
+    setDialog(null)
   }
 
   return (
-    <div className={`border-l-4 rounded-lg shadow-sm p-4 mb-3 ${getColorByTipo(alerta.tipo)} bg-opacity-50`}>
-      <div className="flex justify-between items-start">
-        <div className="flex gap-3">
-          <div className="text-2xl">{getIconoByTipo(alerta.tipo)}</div>
-          <div>
-            <h3 className="font-bold">{alerta.tipo?.replace(/_/g, ' ') || 'Alerta'}</h3>
-            <p className="text-sm mt-1">{alerta.mensaje}</p>
-            <div className="flex gap-4 mt-2 text-xs">
-              <span>📅 {formatearFecha(alerta.fechaAlerta)}</span>
-              {alerta.diasRestantes > 0 && (
-                <span className="font-semibold">⏰ {alerta.diasRestantes} días restantes</span>
+    <>
+      <Card
+        elevation={0}
+        sx={{
+          border: '1px solid #E2E8F0',
+          borderLeft: `4px solid ${pr.accent}`,
+          borderRadius: 2,
+          mb: 1.5,
+          opacity: cerrada ? 0.7 : 1,
+        }}
+      >
+        <CardContent sx={{ p: '14px 16px !important', display: 'flex', gap: 1.5 }}>
+          <Box sx={{ fontSize: 24, lineHeight: 1 }}>{ICONO_TIPO[alerta.tipo] || '🔔'}</Box>
+
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center', mb: 0.5 }}>
+              <Chip
+                size="small"
+                label={prioridad}
+                sx={{ bgcolor: pr.bg, color: pr.color, fontWeight: 700, height: 20, fontSize: 11 }}
+              />
+              <Chip
+                size="small"
+                color={COLOR_ESTADO[estado] || 'default'}
+                label={LABEL_ESTADO[estado] || estado}
+                variant="outlined"
+                sx={{ height: 20, fontSize: 11 }}
+              />
+              {alerta.vencida && (
+                <Chip size="small" color="error" label="Vencida" sx={{ height: 20, fontSize: 11 }} />
+              )}
+              <Typography variant="body2" fontWeight={700} sx={{ color: '#334155' }}>
+                {(alerta.tipo || 'Alerta').replace(/_/g, ' ')}
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" sx={{ color: '#475569' }}>{alerta.mensaje}</Typography>
+
+            {alerta.accionRecomendada && (
+              <Typography variant="caption" sx={{ color: '#64748B', fontStyle: 'italic', display: 'block', mt: 0.25 }}>
+                💡 {alerta.accionRecomendada}
+              </Typography>
+            )}
+
+            <Box sx={{ display: 'flex', gap: 2, mt: 0.75, flexWrap: 'wrap' }}>
+              <Typography variant="caption" color="text.secondary">📅 {formatearFecha(alerta.fechaAlerta)}</Typography>
+              {alerta.fechaVencimiento && (
+                <Typography variant="caption" color="text.secondary">⏳ Vence: {formatearFecha(alerta.fechaVencimiento)}</Typography>
+              )}
+              {typeof alerta.diasRestantes === 'number' && alerta.diasRestantes !== 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  ⏰ {alerta.diasRestantes > 0 ? `${alerta.diasRestantes} días restantes` : `${Math.abs(alerta.diasRestantes)} días de atraso`}
+                </Typography>
               )}
               {alerta.animal && (
-                <span>🐄 {alerta.animal.nroArete} - {alerta.animal.nombre || 'Sin nombre'}</span>
+                <Typography variant="caption" color="text.secondary">🐄 {alerta.animal.nroArete} - {alerta.animal.nombre || 'Sin nombre'}</Typography>
               )}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {!alerta.leida && (
-            <button
-              onClick={() => onMarcarLeida(alerta.id)}
-              className="text-green-600 hover:text-green-800 text-sm"
-              title="Marcar como leída"
-            >
-              ✅
-            </button>
-          )}
-          <button
-            onClick={() => onEliminar(alerta.id)}
-            className="text-red-600 hover:text-red-800 text-sm"
-            title="Eliminar"
+            </Box>
+          </Box>
+
+          <Tooltip title="Acciones">
+            <IconButton size="small" onClick={openMenu}>
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </CardContent>
+      </Card>
+
+      <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={closeMenu}>
+        {!alerta.leida && (
+          <MenuItem onClick={() => { onMarcarLeida(alerta.id); closeMenu() }}>
+            <ListItemIcon><DoneOutlinedIcon fontSize="small" color="info" /></ListItemIcon>
+            <ListItemText>Marcar como leída</ListItemText>
+          </MenuItem>
+        )}
+        {!cerrada && (
+          <MenuItem onClick={() => { onEnProceso(alerta.id); closeMenu() }}>
+            <ListItemIcon><PendingActionsOutlinedIcon fontSize="small" color="primary" /></ListItemIcon>
+            <ListItemText>Marcar en proceso</ListItemText>
+          </MenuItem>
+        )}
+        {!cerrada && (
+          <MenuItem onClick={() => abrirDialog('resolver')}>
+            <ListItemIcon><CheckCircleOutlinedIcon fontSize="small" color="success" /></ListItemIcon>
+            <ListItemText>Resolver alerta</ListItemText>
+          </MenuItem>
+        )}
+        {!cerrada && (
+          <MenuItem onClick={() => abrirDialog('descartar')}>
+            <ListItemIcon><BlockOutlinedIcon fontSize="small" color="action" /></ListItemIcon>
+            <ListItemText>Descartar alerta</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { onEliminar(alerta.id); closeMenu() }}>
+          <ListItemIcon><DeleteOutlinedIcon fontSize="small" color="error" /></ListItemIcon>
+          <ListItemText>Eliminar</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      <Dialog open={!!dialog} onClose={() => setDialog(null)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          {dialog === 'resolver' ? 'Resolver alerta' : 'Descartar alerta'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{alerta.mensaje}</Typography>
+          <TextField
+            label="Observación (opcional)"
+            multiline
+            rows={3}
+            fullWidth
+            size="small"
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setDialog(null)} variant="outlined" color="inherit">Cancelar</Button>
+          <Button
+            onClick={confirmarDialog}
+            variant="contained"
+            color={dialog === 'resolver' ? 'success' : 'warning'}
           >
-            🗑️
-          </button>
-        </div>
-      </div>
-    </div>
+            {dialog === 'resolver' ? 'Resolver' : 'Descartar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
-
-export default AlertaCard

@@ -11,19 +11,56 @@ const VIA_OPCIONES = [
   { value: 'ORAL', label: 'Oral' },
 ]
 
+const SEXO_OPCIONES = [
+  { value: 'AMBOS', label: 'Ambos' },
+  { value: 'MACHO', label: 'Macho' },
+  { value: 'HEMBRA', label: 'Hembra' },
+]
+
+const TIPO_PRODUCCION_OPCIONES = [
+  { value: 'TODOS', label: 'Todos' },
+  { value: 'CARNE', label: 'Carne' },
+  { value: 'LECHE', label: 'Leche' },
+  { value: 'DOBLE_PROPOSITO', label: 'Doble propósito' },
+]
+
 const FORM_INICIAL = {
+  // Datos básicos
   nombre: '',
   descripcion: '',
   enfermedadPreviene: '',
+  laboratorio: '',
+  lote: '',
+  activo: true,
+  // Aplicación
   dosisRecomendada: '',
   viaAplicacion: 'INTRAMUSCULAR',
   intervaloDias: 365,
   edadMinimaMeses: 0,
+  requiereRefuerzo: false,
+  diasAnticipacionAlerta: 30,
+  // Aplicabilidad
+  sexoAplicable: 'AMBOS',
+  tipoProduccionAplicable: 'TODOS',
+  // Inventario
   stockCantidad: '',
   stockMinimo: '',
-  lote: '',
   fechaVencimiento: '',
-  activo: true,
+  // Observaciones
+  observacionesTecnicas: '',
+}
+
+// Indicadores: usa los flags del backend con fallback de cálculo local
+const esStockBajo = (v) => {
+  if (typeof v.isStockBajo === 'boolean') return v.isStockBajo
+  const min = parseFloat(v.stockMinimo || 0)
+  return min > 0 && parseFloat(v.stockCantidad || 0) <= min
+}
+
+const esVencida = (v) => {
+  if (typeof v.isVencida === 'boolean') return v.isVencida
+  if (!v.fechaVencimiento) return false
+  return new Date(v.fechaVencimiento) < new Date(new Date().toDateString())
 }
 
 export default function VacunasList() {
@@ -42,7 +79,11 @@ export default function VacunasList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [estadoFilter, setEstadoFilter] = useState('todos')
+  const [stockBajoFilter, setStockBajoFilter] = useState(false)
+  const [vencidasFilter, setVencidasFilter] = useState(false)
   const [viaFilter, setViaFilter] = useState('todos')
+  const [sexoFilter, setSexoFilter] = useState('todos')
+  const [tipoProduccionFilter, setTipoProduccionFilter] = useState('todos')
 
   const vacunas = data?.vacunas || []
 
@@ -53,22 +94,39 @@ export default function VacunasList() {
       filtered = filtered.filter(v =>
         v.nombre?.toLowerCase().includes(term) ||
         v.descripcion?.toLowerCase().includes(term) ||
-        v.enfermedadPreviene?.toLowerCase().includes(term)
+        v.enfermedadPreviene?.toLowerCase().includes(term) ||
+        v.laboratorio?.toLowerCase().includes(term)
       )
     }
     if (estadoFilter !== 'todos') {
       filtered = filtered.filter(v => estadoFilter === 'activo' ? v.activo : !v.activo)
     }
+    if (stockBajoFilter) {
+      filtered = filtered.filter(v => esStockBajo(v))
+    }
+    if (vencidasFilter) {
+      filtered = filtered.filter(v => esVencida(v))
+    }
     if (viaFilter !== 'todos') {
       filtered = filtered.filter(v => v.viaAplicacion === viaFilter)
     }
+    if (sexoFilter !== 'todos') {
+      filtered = filtered.filter(v => v.sexoAplicable === sexoFilter)
+    }
+    if (tipoProduccionFilter !== 'todos') {
+      filtered = filtered.filter(v => v.tipoProduccionAplicable === tipoProduccionFilter)
+    }
     return filtered
-  }, [vacunas, searchTerm, estadoFilter, viaFilter])
+  }, [vacunas, searchTerm, estadoFilter, stockBajoFilter, vencidasFilter, viaFilter, sexoFilter, tipoProduccionFilter])
 
   const limpiarFiltros = () => {
     setSearchTerm('')
     setEstadoFilter('todos')
+    setStockBajoFilter(false)
+    setVencidasFilter(false)
     setViaFilter('todos')
+    setSexoFilter('todos')
+    setTipoProduccionFilter('todos')
   }
 
   const handleChange = (e) => {
@@ -84,7 +142,9 @@ export default function VacunasList() {
     if (!form.viaAplicacion) errors.viaAplicacion = 'La vía de aplicación es obligatoria'
     if (form.stockCantidad !== '' && parseFloat(form.stockCantidad) < 0) errors.stockCantidad = 'No puede ser negativo'
     if (form.stockMinimo !== '' && parseFloat(form.stockMinimo) < 0) errors.stockMinimo = 'No puede ser negativo'
+    if (form.intervaloDias !== '' && parseInt(form.intervaloDias) < 0) errors.intervaloDias = 'No puede ser negativo'
     if (form.edadMinimaMeses !== '' && parseInt(form.edadMinimaMeses) < 0) errors.edadMinimaMeses = 'No puede ser negativo'
+    if (form.diasAnticipacionAlerta !== '' && parseInt(form.diasAnticipacionAlerta) < 0) errors.diasAnticipacionAlerta = 'No puede ser negativo'
     return errors
   }
 
@@ -101,15 +161,21 @@ export default function VacunasList() {
       nombre: vacuna.nombre || '',
       descripcion: vacuna.descripcion || '',
       enfermedadPreviene: vacuna.enfermedadPreviene || '',
+      laboratorio: vacuna.laboratorio || '',
+      lote: vacuna.lote || '',
+      activo: vacuna.activo,
       dosisRecomendada: vacuna.dosisRecomendada || '',
       viaAplicacion: vacuna.viaAplicacion || 'INTRAMUSCULAR',
       intervaloDias: vacuna.intervaloDias ?? 365,
       edadMinimaMeses: vacuna.edadMinimaMeses ?? 0,
+      requiereRefuerzo: vacuna.requiereRefuerzo ?? false,
+      diasAnticipacionAlerta: vacuna.diasAnticipacionAlerta ?? 30,
+      sexoAplicable: vacuna.sexoAplicable || 'AMBOS',
+      tipoProduccionAplicable: vacuna.tipoProduccionAplicable || 'TODOS',
       stockCantidad: vacuna.stockCantidad ?? '',
       stockMinimo: vacuna.stockMinimo ?? '',
-      lote: vacuna.lote || '',
       fechaVencimiento: vacuna.fechaVencimiento || '',
-      activo: vacuna.activo,
+      observacionesTecnicas: vacuna.observacionesTecnicas || '',
     })
     setFormErrors({})
     setShowForm(true)
@@ -127,14 +193,20 @@ export default function VacunasList() {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion || null,
       enfermedadPreviene: form.enfermedadPreviene || null,
+      laboratorio: form.laboratorio || null,
+      lote: form.lote || null,
       dosisRecomendada: form.dosisRecomendada.trim(),
       viaAplicacion: form.viaAplicacion,
       intervaloDias: parseInt(form.intervaloDias) || 365,
       edadMinimaMeses: parseInt(form.edadMinimaMeses) || 0,
+      requiereRefuerzo: !!form.requiereRefuerzo,
+      diasAnticipacionAlerta: form.diasAnticipacionAlerta !== '' ? parseInt(form.diasAnticipacionAlerta) : 30,
+      sexoAplicable: form.sexoAplicable,
+      tipoProduccionAplicable: form.tipoProduccionAplicable,
       stockCantidad: form.stockCantidad !== '' ? parseFloat(form.stockCantidad) : 0,
       stockMinimo: form.stockMinimo !== '' ? parseFloat(form.stockMinimo) : 0,
-      lote: form.lote || null,
       fechaVencimiento: form.fechaVencimiento || null,
+      observacionesTecnicas: form.observacionesTecnicas || null,
     }
 
     try {
@@ -203,7 +275,8 @@ export default function VacunasList() {
   if (loading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={error.message} />
 
-  const hayFiltros = searchTerm || estadoFilter !== 'todos' || viaFilter !== 'todos'
+  const hayFiltros = searchTerm || estadoFilter !== 'todos' || stockBajoFilter || vencidasFilter ||
+    viaFilter !== 'todos' || sexoFilter !== 'todos' || tipoProduccionFilter !== 'todos'
 
   return (
     <div>
@@ -213,7 +286,7 @@ export default function VacunasList() {
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Buscar por nombre, descripción o enfermedad..."
+              placeholder="Buscar por nombre, enfermedad, laboratorio..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 pl-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -241,7 +314,7 @@ export default function VacunasList() {
         </div>
 
         {showFilters && (
-          <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-3">
             <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
               <option value="todos">Todos los estados</option>
               <option value="activo">Activos</option>
@@ -251,6 +324,22 @@ export default function VacunasList() {
               <option value="todos">Todas las vías</option>
               {VIA_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            <select value={sexoFilter} onChange={(e) => setSexoFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
+              <option value="todos">Todos los sexos</option>
+              {SEXO_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <select value={tipoProduccionFilter} onChange={(e) => setTipoProduccionFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
+              <option value="todos">Todos los tipos de producción</option>
+              {TIPO_PRODUCCION_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <label className="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+              <input type="checkbox" checked={stockBajoFilter} onChange={(e) => setStockBajoFilter(e.target.checked)} />
+              <span className="text-sm text-gray-700">Solo stock bajo</span>
+            </label>
+            <label className="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+              <input type="checkbox" checked={vencidasFilter} onChange={(e) => setVencidasFilter(e.target.checked)} />
+              <span className="text-sm text-gray-700">Solo vencidas</span>
+            </label>
           </div>
         )}
 
@@ -286,46 +375,63 @@ export default function VacunasList() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Enfermedad previene</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Dosis</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Vía</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Intervalo</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Edad mín.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Stock</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Stock mín.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Vencimiento</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Laboratorio</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {vacunasFiltradas.map((v) => (
-                <tr key={v.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{v.nombre}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{v.enfermedadPreviene || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{v.dosisRecomendada}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">{viaLabel(v.viaAplicacion)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    <span className={parseFloat(v.stockCantidad || 0) <= parseFloat(v.stockMinimo || 0) && parseFloat(v.stockMinimo || 0) > 0 ? 'text-red-600 font-medium' : ''}>
-                      {v.stockCantidad ?? 0}
-                    </span>
-                    {parseFloat(v.stockMinimo || 0) > 0 && (
-                      <span className="text-gray-400 text-xs ml-1">/ mín {v.stockMinimo}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{v.fechaVencimiento || '-'}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${v.activo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {v.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2">
-                      <button onClick={() => abrirEditar(v)} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">Editar</button>
-                      <button onClick={() => toggleActivo(v)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
-                        {v.activo ? 'Inactivar' : 'Activar'}
-                      </button>
-                      <button onClick={() => setShowConfirm(v.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Eliminar</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {vacunasFiltradas.map((v) => {
+                const stockBajo = esStockBajo(v)
+                const vencida = esVencida(v)
+                return (
+                  <tr key={v.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{v.nombre}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{v.enfermedadPreviene || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{v.dosisRecomendada}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">{viaLabel(v.viaAplicacion)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{v.intervaloDias ?? 0} días</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{v.edadMinimaMeses ?? 0} m</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      <span className={stockBajo ? 'text-red-600 font-medium' : ''}>{v.stockCantidad ?? 0}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{v.stockMinimo ?? 0}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      <span className={vencida ? 'text-red-600 font-medium' : ''}>{v.fechaVencimiento || '-'}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{v.laboratorio || '-'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex flex-col gap-1">
+                        <span className={`px-2 py-0.5 rounded-full text-xs text-center ${v.activo ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'}`}>
+                          {v.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                        {stockBajo && (
+                          <span className="px-2 py-0.5 rounded-full text-xs text-center bg-amber-100 text-amber-800">Stock bajo</span>
+                        )}
+                        {vencida && (
+                          <span className="px-2 py-0.5 rounded-full text-xs text-center bg-red-100 text-red-800">Vencida</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex gap-2">
+                        <button onClick={() => abrirEditar(v)} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">Editar</button>
+                        <button onClick={() => toggleActivo(v)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                          {v.activo ? 'Inactivar' : 'Activar'}
+                        </button>
+                        <button onClick={() => setShowConfirm(v.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Eliminar</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -341,9 +447,9 @@ export default function VacunasList() {
               </h2>
               <form onSubmit={handleSubmit} className="space-y-5">
 
-                {/* Sección: Identificación */}
+                {/* 1. Datos básicos */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Identificación</h3>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Datos básicos</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
@@ -357,6 +463,10 @@ export default function VacunasList() {
                       {formErrors.nombre && <p className="text-red-500 text-xs mt-1">{formErrors.nombre}</p>}
                     </div>
                     <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                      <textarea name="descripcion" value={form.descripcion} onChange={handleChange} rows={2} className="w-full px-3 py-2 border rounded-md" />
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Enfermedad que previene</label>
                       <input
                         name="enfermedadPreviene"
@@ -366,16 +476,29 @@ export default function VacunasList() {
                         placeholder="Ej: Fiebre Aftosa"
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                      <textarea name="descripcion" value={form.descripcion} onChange={handleChange} rows={2} className="w-full px-3 py-2 border rounded-md" />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Laboratorio</label>
+                      <input name="laboratorio" value={form.laboratorio} onChange={handleChange} className="w-full px-3 py-2 border rounded-md" placeholder="Ej: Biogénesis" />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Lote</label>
+                      <input name="lote" value={form.lote} onChange={handleChange} className="w-full px-3 py-2 border rounded-md" placeholder="Ej: LOT-2024-001" />
+                    </div>
+                    {editando && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                        <select name="activo" value={form.activo} onChange={(e) => setForm(prev => ({ ...prev, activo: e.target.value === 'true' }))} className="w-full px-3 py-2 border rounded-md">
+                          <option value="true">Activo</option>
+                          <option value="false">Inactivo</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Sección: Dosificación */}
+                {/* 2. Aplicación sanitaria */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Dosificación</h3>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Aplicación sanitaria</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Dosis recomendada *</label>
@@ -396,7 +519,15 @@ export default function VacunasList() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Intervalo días (refuerzo)</label>
-                      <input type="number" name="intervaloDias" value={form.intervaloDias} onChange={handleChange} min={0} className="w-full px-3 py-2 border rounded-md" />
+                      <input
+                        type="number"
+                        name="intervaloDias"
+                        value={form.intervaloDias}
+                        onChange={handleChange}
+                        min={0}
+                        className={`w-full px-3 py-2 border rounded-md ${formErrors.intervaloDias ? 'border-red-500' : ''}`}
+                      />
+                      {formErrors.intervaloDias && <p className="text-red-500 text-xs mt-1">{formErrors.intervaloDias}</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Edad mínima (meses)</label>
@@ -410,10 +541,28 @@ export default function VacunasList() {
                       />
                       {formErrors.edadMinimaMeses && <p className="text-red-500 text-xs mt-1">{formErrors.edadMinimaMeses}</p>}
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Días anticipación alerta</label>
+                      <input
+                        type="number"
+                        name="diasAnticipacionAlerta"
+                        value={form.diasAnticipacionAlerta}
+                        onChange={handleChange}
+                        min={0}
+                        className={`w-full px-3 py-2 border rounded-md ${formErrors.diasAnticipacionAlerta ? 'border-red-500' : ''}`}
+                      />
+                      {formErrors.diasAnticipacionAlerta && <p className="text-red-500 text-xs mt-1">{formErrors.diasAnticipacionAlerta}</p>}
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 cursor-pointer py-2">
+                        <input type="checkbox" name="requiereRefuerzo" checked={form.requiereRefuerzo} onChange={handleChange} />
+                        <span className="text-sm font-medium text-gray-700">Requiere refuerzo</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 
-                {/* Sección: Inventario */}
+                {/* 3. Inventario */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Inventario</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -443,27 +592,44 @@ export default function VacunasList() {
                       />
                       {formErrors.stockMinimo && <p className="text-red-500 text-xs mt-1">{formErrors.stockMinimo}</p>}
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Lote</label>
-                      <input name="lote" value={form.lote} onChange={handleChange} className="w-full px-3 py-2 border rounded-md" placeholder="Ej: LOT-2024-001" />
-                    </div>
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de vencimiento</label>
                       <input type="date" name="fechaVencimiento" value={form.fechaVencimiento} onChange={handleChange} className="w-full px-3 py-2 border rounded-md" />
                     </div>
                   </div>
                 </div>
 
-                {/* Sección: Estado (solo en edición) */}
-                {editando && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Estado</h3>
-                    <select name="activo" value={form.activo} onChange={(e) => setForm(prev => ({ ...prev, activo: e.target.value === 'true' }))} className="w-full px-3 py-2 border rounded-md">
-                      <option value="true">Activo</option>
-                      <option value="false">Inactivo</option>
-                    </select>
+                {/* 4. Aplicabilidad */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Aplicabilidad</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sexo aplicable</label>
+                      <select name="sexoAplicable" value={form.sexoAplicable} onChange={handleChange} className="w-full px-3 py-2 border rounded-md">
+                        {SEXO_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de producción aplicable</label>
+                      <select name="tipoProduccionAplicable" value={form.tipoProduccionAplicable} onChange={handleChange} className="w-full px-3 py-2 border rounded-md">
+                        {TIPO_PRODUCCION_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                {/* 5. Observaciones */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 pb-1 border-b">Observaciones</h3>
+                  <textarea
+                    name="observacionesTecnicas"
+                    value={form.observacionesTecnicas}
+                    onChange={handleChange}
+                    rows={3}
+                    className="w-full px-3 py-2 border rounded-md"
+                    placeholder="Conservación, contraindicaciones, recomendaciones técnicas..."
+                  />
+                </div>
 
                 <div className="flex gap-3 pt-2">
                   <button type="submit" className="flex-1 bg-green-600 text-white py-2 rounded-md hover:bg-green-700">
