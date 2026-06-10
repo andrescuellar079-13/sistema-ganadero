@@ -7,7 +7,14 @@
       "Bash(git rm *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git switch *)"
+      "Bash(git switch *)",
+      "Bash(git branch *)",
+      "Bash(git check-ignore *)",
+      "Bash(backend/venv/Scripts/python.exe -c \"import django; print\\('django', django.get_version\\(\\)\\)\")",
+      "Bash(backend/venv/Scripts/python.exe -m pip list)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Hp\\\\softwaremontero\\\\sistema-ganadero\\\\frontend\\\\src\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(xargs -I {} basename {})"
     ]
   }
 }
