@@ -14,7 +14,14 @@
       "Bash(backend/venv/Scripts/python.exe -m pip list)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Hp\\\\softwaremontero\\\\sistema-ganadero\\\\frontend\\\\src\" -Directory)",
       "Bash(Select-Object Name)",
-      "Bash(xargs -I {} basename {})"
+      "Bash(xargs -I {} basename {})",
+      "Bash(git commit -m 'docs: actualizar README + docs backend/frontend; skills y guia Claude *)",
+      "Bash(ls -la seed_data.py)",
+      "Bash(sed -n '228,240p' manage.py)",
+      "Bash(./venv/Scripts/python.exe manage.py check)",
+      "Bash(git ls-tree *)",
+      "Bash(git commit -m 'chore: ignorar CLAUDE.md \\(guia Claude solo en rama de desarrollo\\) *)",
+      "Bash(git push *)"
     ]
   }
 }
