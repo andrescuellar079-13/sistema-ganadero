@@ -145,9 +145,9 @@ const crearMedicamento = async (variables) => {
 
 ## ⚠️ Gotchas conocidos de este repo
 
-- **`backend/manage.py` tiene `seed_data.py` pegado al final.** Eso hace que TODO comando
-  one-off (`shell -c`, `makemigrations`, etc.) ejecute el seed y a veces crashee con ruido.
-  Si necesitas un comando one-off limpio, redirige stderr: en PowerShell `... 2>$null`.
+- **`backend/manage.py` ya está limpio** (forma estándar de Django). Antes tenía una copia vieja
+  de `seed_data.py` pegada al final que se ejecutaba tras cada comando one-off; se eliminó. El
+  seeder real y mantenido es `seed_data.py` (`python seed_data.py`) o `seed_pedro.py`.
 - **Seeders con bugs latentes:** `ProduccionLeche` requiere una `Lactancia` previa;
   `RegistroPeso.ganancia` mezcla float/Decimal; `Reproduccion` tiene `tipo_parto` y
   `peso_total_crias` NOT NULL. Si tocas seeders, ten esto presente.

@@ -246,16 +246,16 @@ python manage.py migrate
 | Archivo | Descripción |
 |---|---|
 | `seed_pedro.py` | Seeder **idempotente** de desarrollo (Hacienda Pedros, usuario `pedro`). Recomendado. |
-| `seed_data.py` | Datos base. **Ojo:** su contenido está pegado al final de `manage.py` (ver gotchas). |
+| `seed_data.py` | Datos base (100+ registros por módulo). Se ejecuta con `python seed_data.py`. |
 | `seed_categorias.py`, `seed_modulos.py` | Seeds específicos de catálogos/módulos. |
 
 ---
 
 ## Gotchas
 
-- **`manage.py` tiene `seed_data.py` pegado al final.** Comandos one-off (`shell -c`, a veces
-  `makemigrations`) ejecutan el seed y emiten ruido o crashean. Para un comando limpio en
-  PowerShell, redirige stderr: `python manage.py <cmd> 2>$null`.
+- **`manage.py` ya está limpio.** Antes tenía una copia vieja y rota de `seed_data.py` pegada al
+  final que se ejecutaba tras cada comando one-off (el origen de errores y ruido); se eliminó.
+  El seeder mantenido es `seed_data.py` (`python seed_data.py`) o `seed_pedro.py`.
 - **Bugs latentes de seeders:** `ProduccionLeche` requiere una `Lactancia` previa;
   `RegistroPeso.ganancia` mezcla float/Decimal; `Reproduccion` tiene `tipo_parto` y
   `peso_total_crias` NOT NULL.
