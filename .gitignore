@@ -28,5 +28,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Claude (config local / skills - solo en rama de desarrollo)
+# Claude (config local / skills / guia - solo en rama de desarrollo)
 .claude/
+CLAUDE.md
