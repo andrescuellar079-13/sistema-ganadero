@@ -21,7 +21,14 @@
       "Bash(./venv/Scripts/python.exe manage.py check)",
       "Bash(git ls-tree *)",
       "Bash(git commit -m 'chore: ignorar CLAUDE.md \\(guia Claude solo en rama de desarrollo\\) *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git commit -m 'merge: integrar mejoras de escobarnina en main \\(sin config de Claude\\) *)",
+      "Bash(grep -E \"^\\\\.claude|^CLAUDE\\\\.md|^sistema-ganadero/|\\\\.rar$\")",
+      "Bash(git checkout *)",
+      "Bash(backend/venv/Scripts/python.exe backend/manage.py migrate)",
+      "Bash(backend/venv/Scripts/python.exe backend/manage.py runserver 127.0.0.1:8000)",
+      "Bash(npm run *)",
+      "Bash(backend/venv/Scripts/python.exe -c \"import urllib.request,json; req=urllib.request.Request\\('http://127.0.0.1:8000/graphql/',data=json.dumps\\({'query':'{health}'}\\).encode\\(\\),headers={'Content-Type':'application/json'}\\); print\\(urllib.request.urlopen\\(req,timeout=8\\).read\\(\\).decode\\(\\)\\)\")"
     ]
   }
 }
