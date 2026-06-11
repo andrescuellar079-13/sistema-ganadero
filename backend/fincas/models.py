@@ -28,10 +28,11 @@ class TransferenciaFinca(models.Model):
         ('OTRO',                'Otro'),
     ]
     ESTADO_CHOICES = [
-        ('BORRADOR',   'Borrador'),
-        ('CONFIRMADA', 'Confirmada'),
-        ('RECIBIDA',   'Recibida'),
-        ('CANCELADA',  'Cancelada'),
+        ('BORRADOR',             'Borrador'),
+        ('PENDIENTE_RECEPCION',  'Pendiente de recepción'),
+        ('RECIBIDA',             'Recibida'),
+        ('RECHAZADA',            'Rechazada'),
+        ('CANCELADA',            'Cancelada'),
     ]
 
     finca_origen = models.ForeignKey(
@@ -53,7 +54,23 @@ class TransferenciaFinca(models.Model):
         related_name='transferencias_registradas'
     )
     fecha_registro = models.DateTimeField(auto_now_add=True)
+    # fecha_confirmacion se mantiene por compatibilidad; equivale a fecha_envio.
     fecha_confirmacion = models.DateTimeField(null=True, blank=True)
+
+    # --- Flujo de recepción (multi-tenant) ---
+    fecha_envio = models.DateTimeField(null=True, blank=True)
+    fecha_recepcion = models.DateTimeField(null=True, blank=True)
+    recibido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='transferencias_recibidas'
+    )
+    rechazado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='transferencias_rechazadas'
+    )
+    motivo_rechazo = models.TextField(blank=True, null=True)
 
     class Meta:
         ordering = ['-fecha_registro']

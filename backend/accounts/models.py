@@ -56,6 +56,7 @@ class Usuario(AbstractUser):
         null=True,
         blank=True,
         related_name="usuarios",
+        help_text="Finca activa actual del usuario.",
     )
     rol = models.ForeignKey(
         Rol,
@@ -83,5 +84,72 @@ class Usuario(AbstractUser):
         lista = self.rol.get_permisos_lista()
         return 'all' in lista or self.rol.nombre.lower() in ('administrador', 'admin', 'super_admin')
 
+    @property
+    def es_superadmin(self):
+        """Acceso total a todas las fincas (multi-tenant)."""
+        if self.is_superuser:
+            return True
+        if self.rol:
+            if 'all' in self.rol.get_permisos_lista():
+                return True
+            # Defensa: un rol nombrado como superadmin concede acceso global
+            # aunque su lista de permisos haya perdido el comodín 'all'.
+            nombre = (self.rol.nombre or '').strip().lower().replace(' ', '_')
+            if nombre in ('super_admin', 'superadmin'):
+                return True
+        return False
+
+    def fincas_ids(self):
+        """IDs de fincas a las que el usuario tiene acceso (helper central)."""
+        from accounts.permissions import ids_fincas_visibles
+        return ids_fincas_visibles(self)
+
     def __str__(self):
         return self.username
+
+
+class UsuarioFinca(models.Model):
+    """Relación N:M Usuario↔Finca con rol específico por finca (multi-tenant)."""
+
+    ROL_CHOICES = [
+        ("PROPIETARIO",   "Propietario"),
+        ("ADMINISTRADOR", "Administrador"),
+        ("ENCARGADO",     "Encargado"),
+        ("VETERINARIO",   "Veterinario"),
+        ("LECTURA",       "Solo lectura"),
+    ]
+
+    # Roles que pueden administrar la finca (crear/aceptar transferencias, etc.)
+    ROLES_ADMIN = {"PROPIETARIO", "ADMINISTRADOR", "ENCARGADO"}
+
+    usuario = models.ForeignKey(
+        "accounts.Usuario",
+        on_delete=models.CASCADE,
+        related_name="accesos_finca",
+    )
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="accesos_usuario",
+    )
+    rol_en_finca = models.CharField(
+        max_length=15, choices=ROL_CHOICES, default="ENCARGADO"
+    )
+    activo = models.BooleanField(default=True)
+    fecha_asignacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Acceso usuario-finca"
+        verbose_name_plural = "Accesos usuario-finca"
+        unique_together = [["usuario", "finca"]]
+        indexes = [
+            models.Index(fields=["usuario", "activo"], name="uf_usuario_activo_idx"),
+            models.Index(fields=["finca", "activo"], name="uf_finca_activo_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.usuario} → {self.finca} ({self.rol_en_finca})"
+
+    @property
+    def puede_administrar(self):
+        return self.rol_en_finca in self.ROLES_ADMIN

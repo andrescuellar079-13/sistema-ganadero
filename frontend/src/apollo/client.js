@@ -12,10 +12,12 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
     graphQLErrors.forEach(({ message, path }) => {
       console.error(`[GraphQL error] Op: ${operation.operationName} | Path: ${path} | ${message}`)
 
+      const msg = message.toLowerCase()
       const esErrorAuth =
-        message.toLowerCase().includes('not authenticated') ||
-        message.toLowerCase().includes('signature has expired') ||
-        message.toLowerCase().includes('invalid token')
+        msg.includes('not authenticated') ||
+        msg.includes('no autenticado') ||
+        msg.includes('signature has expired') ||
+        msg.includes('invalid token')
 
       if (esErrorAuth && operation.operationName !== 'TokenAuth') {
         // Token inválido/expirado: limpiar sesión y recargar al login

@@ -82,7 +82,12 @@ class Query(graphene.ObjectType):
         return queryset
 
     def resolve_empleado(self, info, id):
-        return Empleado.objects.get(id=id)
+        from accounts.permissions import puede_acceder_finca
+        from graphql import GraphQLError
+        empleado = Empleado.objects.filter(id=id).first()
+        if empleado and not puede_acceder_finca(info.context.user, empleado.finca_id):
+            raise GraphQLError("No tiene acceso a este empleado.")
+        return empleado
 
     def resolve_empleados_activos(self, info, finca_id):
         return Empleado.objects.filter(finca_id=finca_id, estado_laboral='ACTIVO')

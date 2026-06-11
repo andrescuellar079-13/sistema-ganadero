@@ -100,15 +100,27 @@ class Query(graphene.ObjectType):
     resumen_alertas = graphene.Field(ResumenAlertasType, finca_id=graphene.ID(required=True))
     total_gastos = graphene.Float(finca_id=graphene.ID(required=True), anio=graphene.Int())
 
+    def _alertas_visibles(self, user, finca_id):
+        """
+        Alertas de la finca visibles para el usuario:
+        las generales (sin asignar) más las dirigidas específicamente a él.
+        """
+        return Alerta.objects.filter(
+            Q(finca_id=finca_id),
+            Q(asignado_a__isnull=True) | Q(asignado_a=user),
+        )
+
+    @login_required
     def resolve_gastos(self, info, finca_id, animal_id=None):
         queryset = Gasto.objects.filter(finca_id=finca_id)
         if animal_id:
             queryset = queryset.filter(animal_id=animal_id)
         return queryset
 
+    @login_required
     def resolve_alertas(self, info, finca_id, estado=None, prioridad=None,
                         modulo_origen=None, tipo=None):
-        queryset = Alerta.objects.filter(finca_id=finca_id)
+        queryset = Query._alertas_visibles(self, info.context.user, finca_id)
         if estado:
             queryset = queryset.filter(estado=estado)
         if prioridad:
@@ -119,13 +131,15 @@ class Query(graphene.ObjectType):
             queryset = queryset.filter(tipo=tipo)
         return queryset
 
+    @login_required
     def resolve_alertas_pendientes(self, info, finca_id):
-        return Alerta.objects.filter(finca_id=finca_id, leida=False)
+        return Query._alertas_visibles(self, info.context.user, finca_id).filter(leida=False)
 
+    @login_required
     def resolve_resumen_alertas(self, info, finca_id):
         from django.utils import timezone
         hoy = timezone.now().date()
-        base = Alerta.objects.filter(finca_id=finca_id)
+        base = Query._alertas_visibles(self, info.context.user, finca_id)
         return ResumenAlertasType(
             pendientes=base.filter(estado="PENDIENTE").count(),
             criticas=base.filter(prioridad="CRITICA").exclude(
@@ -137,6 +151,7 @@ class Query(graphene.ObjectType):
             resueltas=base.filter(estado="RESUELTA").count(),
         )
 
+    @login_required
     def resolve_total_gastos(self, info, finca_id, anio=None):
         queryset = Gasto.objects.filter(finca_id=finca_id)
         if anio:

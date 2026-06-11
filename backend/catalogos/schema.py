@@ -1,7 +1,9 @@
 import graphene
 from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
+from graphql import GraphQLError
 
+from accounts.permissions import ids_fincas_visibles, ids_para_listado, puede_acceder_finca
 from .models import (
     Raza,
     CategoriaAnimal,
@@ -108,59 +110,46 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_medicamentos(self, info):
-        user = info.context.user
-        finca_id = getattr(user, 'finca_id', None)
-        if finca_id:
-            return Medicamento.objects.filter(finca_id=finca_id)
-        return Medicamento.objects.all()
+        return Medicamento.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
     @login_required
     def resolve_veterinarios(self, info):
-        user = info.context.user
-        finca_id = getattr(user, 'finca_id', None)
-        if finca_id:
-            return Veterinario.objects.filter(finca_id=finca_id)
-        return Veterinario.objects.all()
+        return Veterinario.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
     @login_required
     def resolve_alimentos(self, info):
-        user = info.context.user
-        finca_id = getattr(user, 'finca_id', None)
-        if finca_id:
-            return Alimento.objects.filter(finca_id=finca_id)
-        return Alimento.objects.all()
+        return Alimento.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
     @login_required
     def resolve_reproductores(self, info):
-        user = info.context.user
-        finca_id = getattr(user, 'finca_id', None)
-        if finca_id:
-            return Reproductor.objects.filter(finca_id=finca_id)
-        return Reproductor.objects.all()
+        return Reproductor.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
     @login_required
     def resolve_vacunas(self, info):
-        user = info.context.user
-        finca_id = getattr(user, 'finca_id', None)
-        if finca_id:
-            return Vacuna.objects.filter(finca_id=finca_id)
-        return Vacuna.objects.all()
+        return Vacuna.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
     @login_required
     def resolve_all_vacunas(self, info):
-        return Vacuna.objects.all()
+        return Vacuna.objects.filter(finca_id__in=ids_para_listado(info.context.user))
 
     @login_required
     def resolve_vacuna_by_id(self, info, id):
-        return Vacuna.objects.get(pk=id)
+        vacuna = Vacuna.objects.filter(pk=id).first()
+        if vacuna and not puede_acceder_finca(info.context.user, vacuna.finca_id):
+            raise GraphQLError("No tiene acceso a esta vacuna.")
+        return vacuna
 
     @login_required
     def resolve_vacuna_by_nombre(self, info, nombre):
-        return Vacuna.objects.get(nombre=nombre)
+        return Vacuna.objects.filter(
+            nombre=nombre, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).first()
 
     @login_required
     def resolve_vacunas_activas(self, info):
-        return Vacuna.objects.filter(activo=True)
+        return Vacuna.objects.filter(
+            activo=True, finca_id__in=ids_para_listado(info.context.user)
+        )
 
 
 # ==========================================

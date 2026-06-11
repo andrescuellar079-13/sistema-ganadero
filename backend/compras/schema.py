@@ -4,6 +4,7 @@ from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
 from django.db.models import Sum
 
+from accounts.permissions import ids_fincas_visibles, scope_ids, validar_finca
 from .models import (
     Proveedor,
     NotaCompra,
@@ -70,15 +71,16 @@ class MovimientoInventarioType(DjangoObjectType):
 # ==========================================
 
 class Query(graphene.ObjectType):
-    proveedores = graphene.List(ProveedorType)
-    notas_compra = graphene.List(NotaCompraType)
-    detalles_compra = graphene.List(DetalleCompraType)
-    detalles_compra_alimento = graphene.List(DetalleCompraAlimentoType)
-    detalles_compra_animal = graphene.List(DetalleCompraAnimalType)
+    proveedores = graphene.List(ProveedorType, finca_id=graphene.ID())
+    notas_compra = graphene.List(NotaCompraType, finca_id=graphene.ID())
+    detalles_compra = graphene.List(DetalleCompraType, finca_id=graphene.ID())
+    detalles_compra_alimento = graphene.List(DetalleCompraAlimentoType, finca_id=graphene.ID())
+    detalles_compra_animal = graphene.List(DetalleCompraAnimalType, finca_id=graphene.ID())
 
     compras_por_anio = graphene.List(
         NotaCompraType,
-        anio=graphene.Int(required=True)
+        anio=graphene.Int(required=True),
+        finca_id=graphene.ID(),
     )
 
     movimientos_inventario = graphene.List(
@@ -90,43 +92,52 @@ class Query(graphene.ObjectType):
     productos_por_vencer = graphene.JSONString(finca_id=graphene.ID(), dias=graphene.Int())
     productos_stock_bajo = graphene.JSONString(finca_id=graphene.ID())
 
-    def resolve_proveedores(self, info):
-        return Proveedor.objects.all()
+    @login_required
+    def resolve_proveedores(self, info, finca_id=None):
+        return Proveedor.objects.filter(finca_id__in=scope_ids(info.context.user, finca_id))
 
-    def resolve_notas_compra(self, info):
-        return NotaCompra.objects.all()
+    @login_required
+    def resolve_notas_compra(self, info, finca_id=None):
+        return NotaCompra.objects.filter(finca_id__in=scope_ids(info.context.user, finca_id))
 
-    def resolve_detalles_compra(self, info):
-        return DetalleCompra.objects.all()
+    @login_required
+    def resolve_detalles_compra(self, info, finca_id=None):
+        return DetalleCompra.objects.filter(nota_compra__finca_id__in=scope_ids(info.context.user, finca_id))
 
-    def resolve_detalles_compra_alimento(self, info):
-        return DetalleCompraAlimento.objects.all()
+    @login_required
+    def resolve_detalles_compra_alimento(self, info, finca_id=None):
+        return DetalleCompraAlimento.objects.filter(nota_compra__finca_id__in=scope_ids(info.context.user, finca_id))
 
-    def resolve_detalles_compra_animal(self, info):
-        return DetalleCompraAnimal.objects.all()
+    @login_required
+    def resolve_detalles_compra_animal(self, info, finca_id=None):
+        return DetalleCompraAnimal.objects.filter(nota_compra__finca_id__in=scope_ids(info.context.user, finca_id))
 
-    def resolve_compras_por_anio(self, info, anio):
-        return NotaCompra.objects.filter(fecha_compra__year=anio)
+    @login_required
+    def resolve_compras_por_anio(self, info, anio, finca_id=None):
+        return NotaCompra.objects.filter(
+            fecha_compra__year=anio, finca_id__in=scope_ids(info.context.user, finca_id)
+        )
 
+    @login_required
     def resolve_movimientos_inventario(self, info, finca_id=None, tipo_producto=None, tipo_movimiento=None):
-        qs = MovimientoInventario.objects.all()
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = MovimientoInventario.objects.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         if tipo_producto:
             qs = qs.filter(tipo_producto=tipo_producto)
         if tipo_movimiento:
             qs = qs.filter(tipo_movimiento=tipo_movimiento)
         return qs
 
+    @login_required
     def resolve_productos_por_vencer(self, info, finca_id=None, dias=30):
         from catalogos.models import Medicamento, Alimento, Vacuna
         from django.utils import timezone
         import datetime
         import json
+        ids = scope_ids(info.context.user, finca_id)
         hoy = timezone.now().date()
         limite = hoy + datetime.timedelta(days=dias)
         resultado = []
-        for m in Medicamento.objects.filter(finca_id=finca_id, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
+        for m in Medicamento.objects.filter(finca_id__in=ids, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
             resultado.append({
                 "tipo": "MEDICAMENTO",
                 "id": m.id,
@@ -135,7 +146,7 @@ class Query(graphene.ObjectType):
                 "stock": float(m.stock_cantidad),
                 "unidad": m.unidad_medida or "",
             })
-        for a in Alimento.objects.filter(finca_id=finca_id, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
+        for a in Alimento.objects.filter(finca_id__in=ids, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
             resultado.append({
                 "tipo": "ALIMENTO",
                 "id": a.id,
@@ -144,7 +155,7 @@ class Query(graphene.ObjectType):
                 "stock": float(a.stock_cantidad),
                 "unidad": a.unidad_medida or "",
             })
-        for v in Vacuna.objects.filter(finca_id=finca_id, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
+        for v in Vacuna.objects.filter(finca_id__in=ids, fecha_vencimiento__isnull=False, fecha_vencimiento__lte=limite):
             resultado.append({
                 "tipo": "VACUNA",
                 "id": v.id,
@@ -155,11 +166,13 @@ class Query(graphene.ObjectType):
             })
         return json.dumps(resultado)
 
+    @login_required
     def resolve_productos_stock_bajo(self, info, finca_id=None):
         from catalogos.models import Medicamento, Alimento, Vacuna
         import json
+        ids = scope_ids(info.context.user, finca_id)
         resultado = []
-        for m in Medicamento.objects.filter(finca_id=finca_id, activo=True):
+        for m in Medicamento.objects.filter(finca_id__in=ids, activo=True):
             if m.is_stock_bajo():
                 resultado.append({
                     "tipo": "MEDICAMENTO",
@@ -169,7 +182,7 @@ class Query(graphene.ObjectType):
                     "stock_minimo": float(m.stock_minimo),
                     "unidad": m.unidad_medida or "",
                 })
-        for a in Alimento.objects.filter(finca_id=finca_id, activo=True):
+        for a in Alimento.objects.filter(finca_id__in=ids, activo=True):
             if a.is_stock_bajo():
                 resultado.append({
                     "tipo": "ALIMENTO",
@@ -179,7 +192,7 @@ class Query(graphene.ObjectType):
                     "stock_minimo": float(a.stock_minimo),
                     "unidad": a.unidad_medida or "",
                 })
-        for v in Vacuna.objects.filter(finca_id=finca_id, activo=True):
+        for v in Vacuna.objects.filter(finca_id__in=ids, activo=True):
             if float(v.stock_minimo or 0) > 0 and float(v.stock_cantidad or 0) <= float(v.stock_minimo):
                 resultado.append({
                     "tipo": "VACUNA",
@@ -214,7 +227,7 @@ class CrearProveedor(graphene.Mutation):
     def mutate(self, info, finca_id, nombre, **kwargs):
         try:
             from fincas.models import Finca
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             proveedor = Proveedor.objects.create(
                 finca=finca,
                 nombre=nombre,
@@ -303,7 +316,7 @@ class CrearNotaCompra(graphene.Mutation):
     def mutate(self, info, finca_id, fecha_compra, **kwargs):
         try:
             from fincas.models import Finca
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             proveedor = Proveedor.objects.filter(id=kwargs.get('proveedor_id')).first() if kwargs.get('proveedor_id') else None
             nota_compra = NotaCompra.objects.create(
                 finca=finca,
@@ -546,7 +559,7 @@ class RegistrarMovimientoInventario(graphene.Mutation):
             from catalogos.models import Medicamento, Alimento, Vacuna
             from decimal import Decimal
 
-            finca = Finca.objects.get(id=finca_id)
+            finca = validar_finca(info.context.user, finca_id)
             usuario = info.context.user
 
             medicamento = Medicamento.objects.get(id=kwargs['medicamento_id']) if kwargs.get('medicamento_id') else None

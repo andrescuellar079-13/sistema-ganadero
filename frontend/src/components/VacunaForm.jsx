@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 
 function VacunaForm({ vacuna, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
-    fincaId: '1',
     nombre: '',
     descripcion: '',
     dosisRecomendada: '',
@@ -15,7 +14,6 @@ function VacunaForm({ vacuna, onSubmit, onCancel }) {
   useEffect(() => {
     if (vacuna) {
       setFormData({
-        fincaId: vacuna.fincaId || '1',
         nombre: vacuna.nombre || '',
         descripcion: vacuna.descripcion || '',
         dosisRecomendada: vacuna.dosisRecomendada || '',

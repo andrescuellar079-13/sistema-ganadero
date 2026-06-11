@@ -18,6 +18,7 @@ from .models import (
 from fincas.models import Finca
 from animales.models import Animal
 from catalogos.models import Reproductor, Veterinario, Raza, CategoriaAnimal
+from accounts.permissions import scope_ids
 
 
 # ==========================================
@@ -126,20 +127,17 @@ class Query(graphene.ObjectType):
     # Resolvers existentes
     def resolve_inseminaciones(self, info, finca_id=None):
         qs = InseminacionArtificial.objects.select_related('hembra', 'reproductor', 'finca')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs.order_by('-fecha')
     
     def resolve_montas_naturales(self, info, finca_id=None):
         qs = MontaNatural.objects.select_related('hembra', 'reproductor', 'finca')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs.order_by('-fecha')
     
     def resolve_diagnosticos_prenez(self, info, finca_id=None):
         qs = DiagnosticoPrenez.objects.select_related('hembra', 'veterinario', 'finca')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs.order_by('-fecha')
     
     def resolve_reproducciones(self, info, finca_id=None):
@@ -147,14 +145,12 @@ class Query(graphene.ObjectType):
             'madre', 'padre', 'inseminacion', 'monta',
             'inseminacion__reproductor', 'monta__reproductor'
         ).prefetch_related('crias')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs.order_by('-fecha_parto_real', '-fecha_registro')
     
     def resolve_vacas_prenadas(self, info, finca_id=None):
         qs = Reproduccion.objects.filter(estado="PRENADA").select_related('madre')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs
     
     def resolve_proximos_partos(self, info, dias=30, finca_id=None):
@@ -165,41 +161,37 @@ class Query(graphene.ObjectType):
             fecha_parto_esperado__lte=limite,
             estado="PRENADA"
         ).select_related('madre')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs
     
     # Nuevos resolvers
     def resolve_celos(self, info, finca_id=None, hembra_id=None):
         qs = Celo.objects.select_related('hembra', 'finca')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         if hembra_id:
             qs = qs.filter(hembra_id=hembra_id)
         return qs.order_by('-fecha_inicio')
     
     def resolve_palpaciones(self, info, finca_id=None):
         qs = Palpacion.objects.select_related('hembra', 'veterinario', 'finca')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs.order_by('-fecha')
     
     def resolve_hembras_repetidoras(self, info, finca_id=None):
-        qs = HembraRepetidora.objects.select_related('animal')
-        if finca_id:
-            qs = qs.filter(animal__finca_id=finca_id)
+        qs = HembraRepetidora.objects.select_related('animal').filter(
+            animal__finca_id__in=scope_ids(info.context.user, finca_id)
+        )
         return qs.filter(descartada=False).order_by('-numero_servicios')
     
     def resolve_abortos_detallados(self, info, finca_id=None):
-        qs = AbortoDetallado.objects.select_related('reproduccion__madre')
-        if finca_id:
-            qs = qs.filter(reproduccion__finca_id=finca_id)
+        qs = AbortoDetallado.objects.select_related('reproduccion__madre').filter(
+            reproduccion__finca_id__in=scope_ids(info.context.user, finca_id)
+        )
         return qs.order_by('-created_at')
     
     def resolve_destetes(self, info, finca_id=None):
         qs = Destete.objects.select_related('madre', 'cria', 'finca')
-        if finca_id:
-            qs = qs.filter(finca_id=finca_id)
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
         return qs.order_by('-fecha_destete')
     
     def resolve_dias_abiertos(self, info, hembra_id):

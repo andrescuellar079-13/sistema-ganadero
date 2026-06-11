@@ -12,6 +12,9 @@ import {
   CONFIRMAR_TRANSFERENCIA,
   CANCELAR_TRANSFERENCIA,
   MARCAR_TRANSFERENCIA_RECIBIDA,
+  ENVIAR_TRANSFERENCIA,
+  ACEPTAR_TRANSFERENCIA,
+  RECHAZAR_TRANSFERENCIA,
 } from '../graphql/fincas'
 
 export const useTransferencias = (filtros = {}) => {
@@ -22,9 +25,10 @@ export const useTransferencias = (filtros = {}) => {
 
   const [crearMut]    = useMutation(CREATE_TRANSFERENCIA)
   const [actualizarMut] = useMutation(UPDATE_TRANSFERENCIA)
-  const [confirmarMut]  = useMutation(CONFIRMAR_TRANSFERENCIA)
+  const [enviarMut]     = useMutation(ENVIAR_TRANSFERENCIA)
+  const [aceptarMut]    = useMutation(ACEPTAR_TRANSFERENCIA)
+  const [rechazarMut]   = useMutation(RECHAZAR_TRANSFERENCIA)
   const [cancelarMut]   = useMutation(CANCELAR_TRANSFERENCIA)
-  const [recibirMut]    = useMutation(MARCAR_TRANSFERENCIA_RECIBIDA)
   const [agregarAnimalMut]   = useMutation(AGREGAR_ANIMAL_TRANSFERENCIA)
   const [quitarAnimalMut]    = useMutation(QUITAR_ANIMAL_TRANSFERENCIA)
   const [actualizarDetalleMut] = useMutation(ACTUALIZAR_DETALLE_TRANSFERENCIA)
@@ -47,14 +51,24 @@ export const useTransferencias = (filtros = {}) => {
   const actualizarTransferencia = (id, vars) =>
     wrap(() => actualizarMut({ variables: { id, ...vars } }))
 
-  const confirmarTransferencia = (id) =>
-    wrap(() => confirmarMut({ variables: { id } }))
+  // Enviar (deja en PENDIENTE_RECEPCION; recepcionInmediata para transferencia interna)
+  const enviarTransferencia = (id, recepcionInmediata = false) =>
+    wrap(() => enviarMut({ variables: { id, recepcionInmediata } }))
+
+  // Aceptar (finca destino) — mueve los animales
+  const aceptarTransferencia = (id) =>
+    wrap(() => aceptarMut({ variables: { id } }))
+
+  // Rechazar (finca destino)
+  const rechazarTransferencia = (id, motivoRechazo = null) =>
+    wrap(() => rechazarMut({ variables: { id, motivoRechazo } }))
 
   const cancelarTransferencia = (id) =>
     wrap(() => cancelarMut({ variables: { id } }))
 
-  const marcarRecibida = (id) =>
-    wrap(() => recibirMut({ variables: { id } }))
+  // Compatibilidad con el código existente
+  const confirmarTransferencia = (id) => enviarTransferencia(id)
+  const marcarRecibida = (id) => aceptarTransferencia(id)
 
   const agregarAnimal = (vars) =>
     wrap(() => agregarAnimalMut({ variables: vars }))
@@ -79,6 +93,9 @@ export const useTransferencias = (filtros = {}) => {
     refetch,
     crearTransferencia,
     actualizarTransferencia,
+    enviarTransferencia,
+    aceptarTransferencia,
+    rechazarTransferencia,
     confirmarTransferencia,
     cancelarTransferencia,
     marcarRecibida,

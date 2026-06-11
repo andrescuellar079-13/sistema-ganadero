@@ -126,26 +126,20 @@ class ReproductorAdmin(admin.ModelAdmin):
 
 @admin.register(Vacuna)
 class VacunaAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "enfermedad_previene", "laboratorio", "dosis_recomendada", "via_aplicacion", "stock_cantidad", "stock_minimo", "fecha_vencimiento", "activo")
-    list_filter = ("activo", "via_aplicacion", "sexo_aplicable", "tipo_produccion_aplicable", "requiere_refuerzo")
-    search_fields = ("nombre", "descripcion", "enfermedad_previene", "laboratorio")
+    list_display = ("nombre", "enfermedad_previene", "dosis_recomendada", "via_aplicacion", "stock_cantidad", "stock_minimo", "fecha_vencimiento", "activo")
+    list_filter = ("activo", "via_aplicacion", "finca")
+    search_fields = ("nombre", "descripcion", "enfermedad_previene")
     list_editable = ("activo",)
     readonly_fields = ("created_at", "updated_at")
     fieldsets = (
         ("Datos básicos", {
-            "fields": ("finca", "nombre", "descripcion", "enfermedad_previene", "laboratorio", "lote", "activo")
+            "fields": ("finca", "nombre", "descripcion", "enfermedad_previene", "lote", "activo")
         }),
         ("Aplicación", {
-            "fields": ("dosis_recomendada", "via_aplicacion", "intervalo_dias", "edad_minima_meses", "requiere_refuerzo", "dias_anticipacion_alerta")
-        }),
-        ("Aplicabilidad", {
-            "fields": ("sexo_aplicable", "tipo_produccion_aplicable")
+            "fields": ("dosis_recomendada", "via_aplicacion", "intervalo_dias", "edad_minima_meses")
         }),
         ("Inventario", {
             "fields": ("stock_cantidad", "stock_minimo", "fecha_vencimiento")
-        }),
-        ("Observaciones", {
-            "fields": ("observaciones_tecnicas",)
         }),
         ("Auditoría", {
             "fields": ("created_at", "updated_at"),
