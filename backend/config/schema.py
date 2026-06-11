@@ -12,6 +12,7 @@ from produccion.schema import Query as ProduccionQuery, Mutation as ProduccionMu
 from alertas.schema import Query as AlertasQuery, Mutation as AlertasMutation
 from reproduccion.schema import Query as ReproduccionQuery, Mutation as ReproduccionMutation
 from rrhh.schema import Query as RrhhQuery, Mutation as RrhhMutation
+from configuracion.schema import Query as ConfiguracionQuery, Mutation as ConfiguracionMutation  # <-- AGREGAR
 
 
 class Query(
@@ -26,6 +27,7 @@ class Query(
     AlertasQuery,
     ReproduccionQuery,
     RrhhQuery,
+    ConfiguracionQuery,  # <-- AGREGAR
     graphene.ObjectType,
 ):
     health = graphene.String()
@@ -35,7 +37,7 @@ class Query(
 
 
 class Mutation(
-    AccountsMutation,      # incluye token_auth, verify_token, refresh_token, logout, etc.
+    AccountsMutation,
     CatalogosMutation,
     AnimalesMutation,
     SanidadMutation,
@@ -46,6 +48,7 @@ class Mutation(
     AlertasMutation,
     ReproduccionMutation,
     RrhhMutation,
+    ConfiguracionMutation,  # <-- AGREGAR
     graphene.ObjectType,
 ):
     pass

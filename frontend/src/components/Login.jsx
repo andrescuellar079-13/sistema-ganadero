@@ -1,7 +1,8 @@
 // frontend/src/components/Login.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useLogo } from '../context/LogoContext'
 
 function EyeIcon({ open }) {
   return open ? (
@@ -19,11 +20,21 @@ function EyeIcon({ open }) {
 export default function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
+  const { logoUrl } = useLogo()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [nombreSistema, setNombreSistema] = useState('Sistema Ganadero')
+
+  useEffect(() => {
+    const savedNombre = localStorage.getItem('nombreSistema')
+    if (savedNombre) {
+      setNombreSistema(savedNombre)
+      document.title = `${savedNombre} - Sistema Ganadero`
+    }
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -40,16 +51,24 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Panel izquierdo — decorativo */}
+      {/* Panel izquierdo — decorativo con logo dinámico */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-green-700 via-green-600 to-emerald-500 flex-col items-center justify-center p-12 text-white">
         <div className="max-w-md text-center">
-          <div className="w-24 h-24 rounded-3xl bg-white/15 flex items-center justify-center mx-auto mb-8 backdrop-blur-sm">
-            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
+          <div className="w-24 h-24 rounded-3xl bg-white/15 flex items-center justify-center mx-auto mb-8 backdrop-blur-sm overflow-hidden">
+            {logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt="Logo" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+            )}
           </div>
-          <h1 className="text-4xl font-bold mb-3 tracking-tight">Sistema Ganadero</h1>
+          <h1 className="text-4xl font-bold mb-3 tracking-tight">{nombreSistema}</h1>
           <p className="text-green-100 text-lg leading-relaxed">
             Gestión integral de fincas ganaderas. Control de animales, producción, sanidad y más.
           </p>
@@ -69,12 +88,20 @@ export default function Login() {
         <div className="w-full max-w-sm">
           {/* Logo mobile */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-              </svg>
+            <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center overflow-hidden">
+              {logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt="Logo" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+              )}
             </div>
-            <span className="text-lg font-bold text-gray-800">Sistema Ganadero</span>
+            <span className="text-lg font-bold text-gray-800">{nombreSistema}</span>
           </div>
 
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Bienvenido</h2>
@@ -151,7 +178,7 @@ export default function Login() {
           </form>
 
           <p className="mt-8 text-center text-xs text-gray-400">
-            Sistema Ganadero &copy; {new Date().getFullYear()}
+            {nombreSistema} &copy; {new Date().getFullYear()}
           </p>
         </div>
       </div>
