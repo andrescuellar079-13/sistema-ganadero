@@ -51,19 +51,20 @@ INSTALLED_APPS = [
     "compras",
     "alertas",
     "rrhh",
+    "configuracion",
 ]
 
 # ---------------------------------------------------------------------------
-# Middleware — CorsMiddleware debe ir primero
+# Middleware — CORREGIDO con el orden correcto
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',      # <-- 1. Sesiones (requerido para admin)
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',   # <-- 2. Autenticación (requiere SessionMiddleware)
+    'django.contrib.messages.middleware.MessageMiddleware',      # <-- 3. Mensajes (requiere AuthenticationMiddleware)
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 

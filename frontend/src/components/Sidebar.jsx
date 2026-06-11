@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'  // <-- AGREGAR ESTA LÍNEA
 import { useAuth } from '../context/AuthContext'
 import { useLayout } from '../context/LayoutContext'
+import { useLogo } from '../context/LogoContext'
 import {
   Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Tooltip, Divider, Typography, Box,
@@ -27,7 +29,8 @@ import HomeWorkOutlinedIcon        from '@mui/icons-material/HomeWorkOutlined'
 import ChevronLeftIcon             from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon            from '@mui/icons-material/ChevronRight'
 import AgricultureIcon             from '@mui/icons-material/Agriculture'
-import InventoryOutlinedIcon from '@mui/icons-material/InventoryOutlined'
+import InventoryOutlinedIcon       from '@mui/icons-material/InventoryOutlined'
+import SettingsOutlinedIcon        from '@mui/icons-material/SettingsOutlined'
 
 const ICON_MAP = {
   dashboard:    DashboardOutlinedIcon,
@@ -49,6 +52,7 @@ const ICON_MAP = {
   roles:        AdminPanelSettingsOutlinedIcon,
   catalogos:    ListAltOutlinedIcon,
   fincas:       HomeWorkOutlinedIcon,
+  configuracion: SettingsOutlinedIcon,
 }
 
 const MENU_GROUPS = [
@@ -89,6 +93,7 @@ const MENU_GROUPS = [
       { path: '/roles',     name: 'Roles',     icon: 'roles',     permiso: 'roles_ver' },
       { path: '/catalogos', name: 'Catálogos', icon: 'catalogos', permiso: 'configuracion_ver' },
       { path: '/fincas',    name: 'Fincas',    icon: 'fincas',    permiso: 'configuracion_ver' },
+      { path: '/configuracion', name: 'Configuración', icon: 'configuracion', permiso: 'configuracion_ver' },
     ],
   },
 ]
@@ -98,12 +103,20 @@ const SIDEBAR_CLOSE = 68
 
 const DARK_BG   = 'linear-gradient(180deg, #052e16 0%, #065f46 60%, #052e16 100%)'
 const ITEM_TEXT = '#a7f3d0'
-const GROUP_LBL = '#4ade80'
 
 export default function Sidebar() {
   const location = useLocation()
   const { sidebarOpen, setSidebarOpen } = useLayout()
   const { tienePermiso, esAdministrador, user } = useAuth()
+  const { logoUrl } = useLogo()
+  const [nombreSistema, setNombreSistema] = useState('GanadoSoft')
+
+  useEffect(() => {
+    const savedNombre = localStorage.getItem('nombreSistema')
+    if (savedNombre) {
+      setNombreSistema(savedNombre)
+    }
+  }, [])
 
   const canSee = (item) => {
     if (!item.permiso) return true
@@ -115,7 +128,6 @@ export default function Sidebar() {
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
 
   const W = sidebarOpen ? SIDEBAR_OPEN : SIDEBAR_CLOSE
-
   const initials = ((user?.username || 'U')[0]).toUpperCase()
 
   return (
@@ -137,7 +149,7 @@ export default function Sidebar() {
         },
       }}
     >
-      {/* Brand */}
+      {/* Brand con Logo dinámico */}
       <Box
         sx={{
           height: 56,
@@ -158,14 +170,24 @@ export default function Sidebar() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
             boxShadow: '0 2px 8px rgba(0,0,0,.30)',
+            overflow: 'hidden',
           }}
         >
-          <AgricultureIcon sx={{ fontSize: 18, color: '#fff' }} />
+          {logoUrl ? (
+            <Box
+              component="img"
+              src={logoUrl}
+              sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              alt="Logo"
+            />
+          ) : (
+            <AgricultureIcon sx={{ fontSize: 18, color: '#fff' }} />
+          )}
         </Box>
         {sidebarOpen && (
           <Box sx={{ overflow: 'hidden' }}>
             <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.2 }}>
-              GanadoSoft
+              {nombreSistema}
             </Typography>
             <Typography sx={{ color: '#4ade80', fontSize: '0.625rem', fontWeight: 500 }}>
               Sistema Ganadero

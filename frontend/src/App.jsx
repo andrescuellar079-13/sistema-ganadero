@@ -2,6 +2,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { LayoutProvider } from './context/LayoutContext'
+import { ThemeProvider } from './context/ThemeContext'
+import { LogoProvider } from './context/LogoContext'
+import { ConfiguracionGlobalProvider } from './context/ConfiguracionGlobalContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './components/Login'
 import Layout from './components/Layout'
@@ -9,6 +12,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 import UnauthorizedPage from './pages/UnauthorizedPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ErrorBoundary from './components/ErrorBoundary'
+import ConfiguracionPage from './pages/ConfiguracionPage'
 
 import DashboardPage from './pages/DashboardPage'
 import AnimalesPage from './pages/AnimalesPage'
@@ -37,32 +41,33 @@ function AppLayout() {
   return (
     <Layout>
       <ErrorBoundary>
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
 
-        <Route path="/catalogos"    element={<ProtectedRoute requiredPermission="catalogos_ver"><CatalogosPage /></ProtectedRoute>} />
-        <Route path="/animales"     element={<ProtectedRoute requiredPermission="animales_ver"><AnimalesPage /></ProtectedRoute>} />
-        <Route path="/vacunas"      element={<ProtectedRoute requiredPermission="vacunas_ver"><VacunasPage /></ProtectedRoute>} />
-        <Route path="/vacunaciones" element={<ProtectedRoute requiredPermission="vacunaciones_ver"><VacunacionesPage /></ProtectedRoute>} />
-        <Route path="/reproduccion" element={<ProtectedRoute requiredPermission="reproduccion_ver"><ReproduccionPage /></ProtectedRoute>} />
-        <Route path="/produccion"   element={<ProtectedRoute requiredPermission="produccion_ver"><ProduccionPage /></ProtectedRoute>} />
-        <Route path="/sanidad"      element={<ProtectedRoute requiredPermission="sanidad_ver"><SanidadPage /></ProtectedRoute>} />
-        <Route path="/alertas"      element={<ProtectedRoute requiredPermission="alertas_ver"><AlertasPage /></ProtectedRoute>} />
-        <Route path="/rrhh"         element={<ProtectedRoute requiredPermission="rrhh_ver"><RrhhPage /></ProtectedRoute>} />
-        <Route path="/clientes"     element={<ProtectedRoute requiredPermission="ventas_ver"><ClientesPage /></ProtectedRoute>} />
-        <Route path="/proveedores"  element={<ProtectedRoute requiredPermission="compras_ver"><ProveedoresPage /></ProtectedRoute>} />
-        <Route path="/compras"      element={<ProtectedRoute requiredPermission="compras_ver"><ComprasPage /></ProtectedRoute>} />
-        <Route path="/inventario" element={<ProtectedRoute requiredPermission="compras_ver"><InventarioPage /></ProtectedRoute>} />
-        <Route path="/ventas"       element={<ProtectedRoute requiredPermission="ventas_ver"><VentasPage /></ProtectedRoute>} />
-        <Route path="/bajas"        element={<ProtectedRoute requiredPermission="animales_ver"><MuerteBajaPage /></ProtectedRoute>} />
-        <Route path="/usuarios"     element={<ProtectedRoute requiredPermission="usuarios_ver"><UsuariosPage /></ProtectedRoute>} />
-        <Route path="/roles"        element={<ProtectedRoute requiredPermission="roles_ver"><RolesPage /></ProtectedRoute>} />
-        <Route path="/fincas"       element={<ProtectedRoute requiredPermission="configuracion_ver"><FincaPage /></ProtectedRoute>} />
+          <Route path="/catalogos"    element={<ProtectedRoute requiredPermission="catalogos_ver"><CatalogosPage /></ProtectedRoute>} />
+          <Route path="/animales"     element={<ProtectedRoute requiredPermission="animales_ver"><AnimalesPage /></ProtectedRoute>} />
+          <Route path="/vacunas"      element={<ProtectedRoute requiredPermission="vacunas_ver"><VacunasPage /></ProtectedRoute>} />
+          <Route path="/vacunaciones" element={<ProtectedRoute requiredPermission="vacunaciones_ver"><VacunacionesPage /></ProtectedRoute>} />
+          <Route path="/reproduccion" element={<ProtectedRoute requiredPermission="reproduccion_ver"><ReproduccionPage /></ProtectedRoute>} />
+          <Route path="/produccion"   element={<ProtectedRoute requiredPermission="produccion_ver"><ProduccionPage /></ProtectedRoute>} />
+          <Route path="/sanidad"      element={<ProtectedRoute requiredPermission="sanidad_ver"><SanidadPage /></ProtectedRoute>} />
+          <Route path="/alertas"      element={<ProtectedRoute requiredPermission="alertas_ver"><AlertasPage /></ProtectedRoute>} />
+          <Route path="/rrhh"         element={<ProtectedRoute requiredPermission="rrhh_ver"><RrhhPage /></ProtectedRoute>} />
+          <Route path="/clientes"     element={<ProtectedRoute requiredPermission="ventas_ver"><ClientesPage /></ProtectedRoute>} />
+          <Route path="/proveedores"  element={<ProtectedRoute requiredPermission="compras_ver"><ProveedoresPage /></ProtectedRoute>} />
+          <Route path="/compras"      element={<ProtectedRoute requiredPermission="compras_ver"><ComprasPage /></ProtectedRoute>} />
+          <Route path="/inventario"   element={<ProtectedRoute requiredPermission="compras_ver"><InventarioPage /></ProtectedRoute>} />
+          <Route path="/ventas"       element={<ProtectedRoute requiredPermission="ventas_ver"><VentasPage /></ProtectedRoute>} />
+          <Route path="/bajas"        element={<ProtectedRoute requiredPermission="animales_ver"><MuerteBajaPage /></ProtectedRoute>} />
+          <Route path="/usuarios"     element={<ProtectedRoute requiredPermission="usuarios_ver"><UsuariosPage /></ProtectedRoute>} />
+          <Route path="/roles"        element={<ProtectedRoute requiredPermission="roles_ver"><RolesPage /></ProtectedRoute>} />
+          <Route path="/fincas"       element={<ProtectedRoute requiredPermission="configuracion_ver"><FincaPage /></ProtectedRoute>} />
+          <Route path="/configuracion" element={<ProtectedRoute><ConfiguracionPage /></ProtectedRoute>} />
 
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
       </ErrorBoundary>
     </Layout>
   )
@@ -91,15 +96,21 @@ function AppContent() {
 }
 
 // ---------------------------------------------------------------------------
-// App principal — ApolloProvider ya está en main.jsx, no lo duplicamos aquí
+// App principal — con ThemeProvider, LogoProvider y ConfiguracionGlobalProvider
 // ---------------------------------------------------------------------------
 function App() {
   return (
     <AuthProvider>
       <LayoutProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <ThemeProvider>
+          <LogoProvider>
+            <ConfiguracionGlobalProvider>
+              <BrowserRouter>
+                <AppContent />
+              </BrowserRouter>
+            </ConfiguracionGlobalProvider>
+          </LogoProvider>
+        </ThemeProvider>
       </LayoutProvider>
     </AuthProvider>
   )
