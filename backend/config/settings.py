@@ -52,7 +52,10 @@ INSTALLED_APPS = [
     "alertas",
     "rrhh",
     "configuracion",
+<<<<<<< HEAD
     "importaciones",
+=======
+>>>>>>> origin/main
 ]
 
 # Importación masiva: tamaño máximo de archivo (MB).
