@@ -380,7 +380,7 @@ export default function ReproduccionPage() {
   const hembras = animales?.filter(a => a.sexo === 'HEMBRA') || []
   
   // Obtener crías (animales que son hijos de alguna madre)
-  const crias = reproducciones?.flatMap(r => r.crias || []) || []
+  const crias = reproducciones?.flatMap(r => r?.crias || []) || []
 
   // Recargar destetes una sola vez al montar el componente
   useEffect(() => {

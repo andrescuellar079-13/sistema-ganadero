@@ -104,7 +104,7 @@ const LactanciaForm = ({ onSuccess }) => {
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
         >
           <option value="">Seleccionar parto</option>
-          {reproducciones?.filter(r => r.madre?.id === formData.vacaId).map(r => (
+          {reproducciones?.filter(r => r?.madre?.id === formData.vacaId).map(r => (
             <option key={r.id} value={r.id}>
               Parto: {new Date(r.fechaPartoReal).toLocaleDateString()} - {r.numCrias} cria(s)
             </option>

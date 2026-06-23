@@ -15,6 +15,7 @@ import ParcelaForm              from '../components/ParcelaForm'
 import MoverAnimalForm          from '../components/MoverAnimalForm'
 import ReportesButtons          from '../components/ReportesButtons'
 import ExportarAnimalesModal    from '../components/ExportarAnimalesModal'
+import ImportarAnimalesModal    from '../components/ImportarAnimalesModal'
 import AnimalSearchBar          from '../components/AnimalSearchBar'
 import AnimalFilters            from '../components/AnimalFilters'
 import AnimalSortSelect         from '../components/AnimalSortSelect'
@@ -36,6 +37,7 @@ import AddOutlinedIcon          from '@mui/icons-material/AddOutlined'
 import InfoOutlinedIcon         from '@mui/icons-material/InfoOutlined'
 import GrassOutlinedIcon        from '@mui/icons-material/GrassOutlined'
 import RestartAltIcon           from '@mui/icons-material/RestartAlt'
+import FileUploadOutlinedIcon   from '@mui/icons-material/FileUploadOutlined'
 
 export default function AnimalesPage() {
   const { razas, categorias, crearAnimal, actualizarAnimal, eliminarAnimal } = useAnimales()
@@ -96,6 +98,7 @@ export default function AnimalesPage() {
   const [detailAnimalId, setDetailAnimalId]  = useState(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportFormato, setExportFormato]     = useState('PDF')
+  const [showImportModal, setShowImportModal] = useState(false)
 
   const notify = (r) => {
     setMessage({ type: r.success ? 'success' : 'error', text: r.message })
@@ -218,6 +221,13 @@ export default function AnimalesPage() {
                 </Button>
               </Tooltip>
             )}
+            <Button
+              variant="outlined" size="small" startIcon={<FileUploadOutlinedIcon />}
+              onClick={() => setShowImportModal(true)}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Importar datos
+            </Button>
             <Button
               variant="contained" size="small" startIcon={<AddOutlinedIcon />}
               onClick={() => { setEditAnimal(null); setShowAnimalForm(true) }}
@@ -571,6 +581,15 @@ export default function AnimalesPage() {
           fechaIngresoDesde,
           fechaIngresoHasta,
         }}
+      />
+
+      {/* Modal de importación masiva */}
+      <ImportarAnimalesModal
+        key={showImportModal ? 'import-open' : 'import-closed'}
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        fincaIdInicial={fincaId}
+        onImported={() => { refetchPaginados(); refetchParcelasPaginadas() }}
       />
 
       {/* Form overlays */}
