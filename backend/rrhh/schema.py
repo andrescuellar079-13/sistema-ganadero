@@ -26,6 +26,7 @@ class EmpleadoType(DjangoObjectType):
     class Meta:
         model = Empleado
         fields = "__all__"
+        convert_choices_to_enum = False
 
     def resolve_nombreCompleto(self, info):
         return self.nombre_completo

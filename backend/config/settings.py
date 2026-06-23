@@ -52,7 +52,11 @@ INSTALLED_APPS = [
     "alertas",
     "rrhh",
     "configuracion",
+    "importaciones",
 ]
+
+# Importación masiva: tamaño máximo de archivo (MB).
+IMPORTACION_MAX_MB = int(os.environ.get("IMPORTACION_MAX_MB", "15"))
 
 # ---------------------------------------------------------------------------
 # Middleware — CORREGIDO con el orden correcto

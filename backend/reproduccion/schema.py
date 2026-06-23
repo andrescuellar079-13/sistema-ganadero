@@ -47,6 +47,11 @@ class ReproduccionType(DjangoObjectType):
     class Meta:
         model = Reproduccion
         fields = "__all__"
+        # Exponer los CharField con choices como String, no como Enum: hay
+        # datos históricos con valores fuera de las choices (ej. tipo_parto=""
+        # en preñadas) que, como Enum no-nullable, anulaban el item completo
+        # de la lista y rompían el frontend ("Cannot read ... of null").
+        convert_choices_to_enum = False
 
 
 # ==========================================

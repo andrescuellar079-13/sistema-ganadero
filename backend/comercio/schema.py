@@ -67,6 +67,7 @@ class MuerteBajaType(DjangoObjectType):
     class Meta:
         model = MuerteBaja
         fields = "__all__"
+        convert_choices_to_enum = False
 
 
 # ==========================================

@@ -21,6 +21,7 @@ class GastoType(DjangoObjectType):
     class Meta:
         model = Gasto
         fields = "__all__"
+        convert_choices_to_enum = False
 
     def resolve_tipoGasto(self, info):
         return self.tipo_gasto
@@ -43,6 +44,9 @@ class AlertaType(DjangoObjectType):
     class Meta:
         model = Alerta
         fields = "__all__"
+        # Datos históricos con valores fuera de las choices anulaban el item
+        # completo (Enum no-nullable) y rompían el dashboard/listados.
+        convert_choices_to_enum = False
 
     def resolve_fechaAlerta(self, info):
         return self.fecha_alerta.isoformat() if self.fecha_alerta else None
