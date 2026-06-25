@@ -1,4 +1,5 @@
-import { useState } from 'react'
+// frontend/src/pages/AnimalesPage.jsx
+import { useState, useEffect } from 'react'
 import { useAnimales }          from '../hooks/useAnimales'
 import { useAnimalesPaginados } from '../hooks/useAnimalesPaginados'
 import { useParcelas }          from '../hooks/useParcelas'
@@ -38,6 +39,8 @@ import InfoOutlinedIcon         from '@mui/icons-material/InfoOutlined'
 import GrassOutlinedIcon        from '@mui/icons-material/GrassOutlined'
 import RestartAltIcon           from '@mui/icons-material/RestartAlt'
 import FileUploadOutlinedIcon   from '@mui/icons-material/FileUploadOutlined'
+import PictureAsPdfIcon         from '@mui/icons-material/PictureAsPdf'
+import TableChartIcon           from '@mui/icons-material/TableChart'
 
 export default function AnimalesPage() {
   const { razas, categorias, crearAnimal, actualizarAnimal, eliminarAnimal } = useAnimales()
@@ -45,6 +48,20 @@ export default function AnimalesPage() {
   const { fincaActual } = useFincas()
 
   const fincaId = fincaActual?.id || null
+
+  useEffect(() => {
+    if (typeof window.jspdf === 'undefined') {
+      const script1 = document.createElement('script')
+      script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+      script1.async = false
+      document.head.appendChild(script1)
+
+      const script2 = document.createElement('script')
+      script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js'
+      script2.async = false
+      document.head.appendChild(script2)
+    }
+  }, [])
 
   const {
     animales, total, paginas, paginaActual, tieneSiguiente, tieneAnterior,
@@ -103,6 +120,178 @@ export default function AnimalesPage() {
   const notify = (r) => {
     setMessage({ type: r.success ? 'success' : 'error', text: r.message })
     setTimeout(() => setMessage(null), 3000)
+  }
+
+  // ==========================================
+  // FUNCIÓN PARA DESCARGAR PDF (SIN EMOJIS)
+  // ==========================================
+  const handleImprimirAnimal = (animal, formato) => {
+    if (formato === 'PDF') {
+      try {
+        if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
+          alert('Las librerías de PDF se están cargando. Intenta nuevamente en unos segundos.')
+          return
+        }
+
+        const { jsPDF } = window.jspdf
+        const doc = new jsPDF('p', 'mm', 'a4')
+        const pageWidth = doc.internal.pageSize.getWidth()
+        const pageHeight = doc.internal.pageSize.getHeight()
+        const margin = 15
+
+        // CABECERA
+        doc.setFillColor(46, 125, 50)
+        doc.rect(margin, margin, 8, 8, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(14)
+        doc.text('🐄', margin + 12, margin + 7)
+
+        doc.setFontSize(20)
+        doc.setTextColor(46, 125, 50)
+        doc.setFont('helvetica', 'bold')
+        doc.text('FICHA DEL ANIMAL', pageWidth / 2, margin + 8, { align: 'center' })
+
+        doc.setDrawColor(46, 125, 50)
+        doc.setLineWidth(0.5)
+        doc.line(margin, margin + 14, pageWidth - margin, margin + 14)
+
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.setFont('helvetica', 'normal')
+        doc.text(document.title || 'Sistema Ganadero', pageWidth / 2, margin + 20, { align: 'center' })
+
+        // DATOS
+        const yStart = margin + 30
+        const col1 = margin + 10
+        const col2 = margin + 65
+
+        const drawRow = (y, label, value) => {
+          doc.setFontSize(10)
+          doc.setTextColor(46, 125, 50)
+          doc.setFont('helvetica', 'bold')
+          doc.text(label + ':', col1, y)
+          doc.setTextColor(50, 50, 50)
+          doc.setFont('helvetica', 'normal')
+          doc.text(String(value || '—'), col2, y)
+        }
+
+        let yPos = yStart
+
+        // IDENTIFICACION
+        doc.setFontSize(12)
+        doc.setTextColor(46, 125, 50)
+        doc.setFont('helvetica', 'bold')
+        doc.text('IDENTIFICACION', col1, yPos)
+        yPos += 8
+        doc.setDrawColor(200, 200, 200)
+        doc.setLineWidth(0.3)
+        doc.line(col1, yPos - 2, pageWidth - margin, yPos - 2)
+        yPos += 6
+
+        drawRow(yPos, 'Arete', animal.nroArete)
+        yPos += 8
+        drawRow(yPos, 'Nombre', animal.nombre || '—')
+        yPos += 8
+        drawRow(yPos, 'Sexo', animal.sexo === 'MACHO' ? 'Macho' : 'Hembra')
+        yPos += 8
+        drawRow(yPos, 'Raza', animal.raza?.nombre || '—')
+        yPos += 8
+        drawRow(yPos, 'Categoria', animal.categoria?.nombre || '—')
+        yPos += 12
+
+        // CARACTERISTICAS
+        doc.setFontSize(12)
+        doc.setTextColor(46, 125, 50)
+        doc.setFont('helvetica', 'bold')
+        doc.text('CARACTERISTICAS', col1, yPos)
+        yPos += 8
+        doc.setDrawColor(200, 200, 200)
+        doc.setLineWidth(0.3)
+        doc.line(col1, yPos - 2, pageWidth - margin, yPos - 2)
+        yPos += 6
+
+        drawRow(yPos, 'Peso', animal.peso ? `${animal.peso} kg` : '—')
+        yPos += 8
+        drawRow(yPos, 'Fecha Nacimiento', animal.fechaNacimiento ? animal.fechaNacimiento.split('-').reverse().join('/') : '—')
+        yPos += 8
+        drawRow(yPos, 'Produccion', animal.tipoProduccion || '—')
+        yPos += 8
+        drawRow(yPos, 'Origen', animal.origen || '—')
+        yPos += 8
+        drawRow(yPos, 'Estado', animal.estado || 'ACTIVO')
+        yPos += 8
+        drawRow(yPos, 'Fecha Registro', animal.fechaIngreso ? animal.fechaIngreso.split('-').reverse().join('/') : '—')
+        yPos += 12
+
+        // OBSERVACIONES
+        if (animal.observaciones) {
+          doc.setFontSize(12)
+          doc.setTextColor(46, 125, 50)
+          doc.setFont('helvetica', 'bold')
+          doc.text('OBSERVACIONES', col1, yPos)
+          yPos += 8
+          doc.setDrawColor(200, 200, 200)
+          doc.setLineWidth(0.3)
+          doc.line(col1, yPos - 2, pageWidth - margin, yPos - 2)
+          yPos += 6
+
+          doc.setFontSize(9)
+          doc.setTextColor(80, 80, 80)
+          doc.setFont('helvetica', 'normal')
+          const obsLines = doc.splitTextToSize(animal.observaciones || 'Sin observaciones', pageWidth - margin * 2 - 20)
+          obsLines.forEach(line => {
+            doc.text(line, col1, yPos)
+            yPos += 6
+          })
+        }
+
+        // PIE DE PAGINA
+        const footerY = pageHeight - 15
+        doc.setDrawColor(200, 200, 200)
+        doc.setLineWidth(0.3)
+        doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+
+        doc.setFontSize(8)
+        doc.setTextColor(150, 150, 150)
+        doc.setFont('helvetica', 'normal')
+        doc.text(
+          `Reporte generado el ${new Date().toLocaleDateString('es-PY')} a las ${new Date().toLocaleTimeString('es-PY')}`,
+          pageWidth / 2,
+          footerY,
+          { align: 'center' }
+        )
+        doc.text(
+          `Ficha ID: ${animal.nroArete}`,
+          pageWidth - margin,
+          footerY,
+          { align: 'right' }
+        )
+
+        // BORDE
+        doc.setDrawColor(46, 125, 50)
+        doc.setLineWidth(0.5)
+        doc.rect(margin - 2, margin - 2, pageWidth - margin * 2 + 4, pageHeight - margin * 2 + 4, 'S')
+
+        doc.save(`ficha_${animal.nroArete}.pdf`)
+
+      } catch (error) {
+        console.error('Error generando PDF:', error)
+        alert('Error al generar el PDF. Verifica tu conexión a internet.')
+      }
+
+    } else {
+      // Excel (CSV)
+      const csvContent = `Arete,Nombre,Sexo,Raza,Categoría,Peso (kg),Fecha Nacimiento,Producción,Origen,Estado,Fecha Registro\n"${animal.nroArete}","${animal.nombre || ''}","${animal.sexo === 'MACHO' ? 'Macho' : 'Hembra'}","${animal.raza?.nombre || ''}","${animal.categoria?.nombre || ''}","${animal.peso || 0}","${animal.fechaNacimiento || ''}","${animal.tipoProduccion || ''}","${animal.origen || ''}","${animal.estado || 'ACTIVO'}","${animal.fechaIngreso || ''}"`
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.href = url
+      link.setAttribute('download', `animal_${animal.nroArete}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    }
   }
 
   const handleCreateAnimal = async (data) => {
@@ -170,7 +359,6 @@ export default function AnimalesPage() {
 
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
           <Typography variant="h5" fontWeight={700}>Gestión Ganadera</Typography>
@@ -200,10 +388,8 @@ export default function AnimalesPage() {
         </Tabs>
       </Box>
 
-      {/* ── ANIMALES (VISTA TABLA) ── */}
       {tabIdx === 0 && (
         <>
-          {/* Toolbar: búsqueda + ordenamiento + limpiar + botón nuevo */}
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
             <Box sx={{ flex: 1, minWidth: 220 }}>
               <AnimalSearchBar value={buscar} onChange={cambiarBusqueda} />
@@ -237,7 +423,6 @@ export default function AnimalesPage() {
             </Button>
           </Box>
 
-          {/* Filtros */}
           <AnimalFilters
             estado={estado}                         onEstado={cambiarEstado}
             sexo={sexo}                             onSexo={cambiarSexo}
@@ -251,7 +436,6 @@ export default function AnimalesPage() {
             pesoMax={pesoMax}                       onPesoMax={cambiarPesoMax}
           />
 
-          {/* TABLA DE ANIMALES */}
           {loadingAnimales && animales.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress size={40} />
@@ -387,6 +571,24 @@ export default function AnimalesPage() {
                               <DeleteOutlinedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                          <Tooltip title="Descargar PDF">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleImprimirAnimal(animal, 'PDF')}
+                            >
+                              <PictureAsPdfIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Exportar Excel">
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => handleImprimirAnimal(animal, 'EXCEL')}
+                            >
+                              <TableChartIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -396,7 +598,6 @@ export default function AnimalesPage() {
             </Paper>
           )}
 
-          {/* Paginación */}
           <AnimalPagination
             total={total}
             paginas={paginas}
@@ -411,10 +612,8 @@ export default function AnimalesPage() {
         </>
       )}
 
-      {/* ── PARCELAS (mantiene el mismo diseño de tarjetas) ── */}
       {tabIdx === 1 && (
         <>
-          {/* Toolbar: búsqueda + ordenamiento + limpiar + botón nuevo */}
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
             <Box sx={{ flex: 1, minWidth: 220 }}>
               <AnimalSearchBar
@@ -445,7 +644,6 @@ export default function AnimalesPage() {
             </Button>
           </Box>
 
-          {/* Filtros de estado y período */}
           <ParcelaFilters
             estado={estadoParcela}
             temporal={temporalParcela}
@@ -453,7 +651,6 @@ export default function AnimalesPage() {
             onTemporal={cambiarTemporalParcela}
           />
 
-          {/* Contenido: loading / vacío / grid de tarjetas */}
           {loadingParcelasPaginadas && parcelasPaginadas.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress size={40} />
@@ -545,7 +742,6 @@ export default function AnimalesPage() {
             </Box>
           )}
 
-          {/* Paginación inferior */}
           <PaginationControls
             count={countParcelas}
             totalPages={totalPagesParcelas}
@@ -559,7 +755,6 @@ export default function AnimalesPage() {
         </>
       )}
 
-      {/* Modal de exportación */}
       <ExportarAnimalesModal
         open={showExportModal}
         onClose={() => setShowExportModal(false)}
@@ -583,7 +778,6 @@ export default function AnimalesPage() {
         }}
       />
 
-      {/* Modal de importación masiva */}
       <ImportarAnimalesModal
         key={showImportModal ? 'import-open' : 'import-closed'}
         open={showImportModal}
@@ -592,7 +786,6 @@ export default function AnimalesPage() {
         onImported={() => { refetchPaginados(); refetchParcelasPaginadas() }}
       />
 
-      {/* Form overlays */}
       {showAnimalForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="max-w-2xl w-full">
