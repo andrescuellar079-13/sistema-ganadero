@@ -12,6 +12,8 @@ import {
   GET_REGISTROS_MASTITIS,
   GET_TIEMPOS_RETIRO,
   GET_ANIMALES_EN_RETIRO,
+  GET_RESUMEN_SANIDAD,
+  GET_CALENDARIO_SANITARIO,
   CREATE_TRATAMIENTO,
   FINALIZAR_TRATAMIENTO,
   CREATE_DESPARASITACION,
@@ -93,6 +95,16 @@ export const useSanidad = () => {
     variables: { fincaId }
   })
 
+  const { data: resumenSanidad, loading: loadingResumen, refetch: refetchResumen } = useQuery(GET_RESUMEN_SANIDAD, {
+    variables: { fincaId },
+    fetchPolicy: 'cache-and-network',
+  })
+
+  const { data: calendarioSanitario, loading: loadingCalendario, refetch: refetchCalendario } = useQuery(GET_CALENDARIO_SANITARIO, {
+    variables: { fincaId, dias: 30 },
+    fetchPolicy: 'cache-and-network',
+  })
+
   // ==========================================
   // Mutations de Creación Existentes
   // ==========================================
@@ -157,6 +169,8 @@ export const useSanidad = () => {
       })
       await refetchTratamientos()
       await refetchActivos()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.crearTratamiento }
     } catch (error) {
       return { success: false, error: error.message }
@@ -170,6 +184,8 @@ export const useSanidad = () => {
       })
       await refetchTratamientos()
       await refetchActivos()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.finalizarTratamiento }
     } catch (error) {
       return { success: false, error: error.message }
@@ -267,6 +283,8 @@ export const useSanidad = () => {
       const { data } = await crearTiempoRetiroMutation({ variables })
       await refetchTiemposRetiro()
       await refetchAnimalesRetiro()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.crearTiempoRetiro }
     } catch (error) {
       return { success: false, error: error.message }
@@ -280,6 +298,8 @@ export const useSanidad = () => {
       })
       await refetchTiemposRetiro()
       await refetchAnimalesRetiro()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.finalizarTiempoRetiro }
     } catch (error) {
       return { success: false, error: error.message }
@@ -298,6 +318,8 @@ export const useSanidad = () => {
       })
       await refetchTratamientos()
       await refetchActivos()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.actualizarTratamiento }
     } catch (error) {
       return { success: false, error: error.message }
@@ -311,6 +333,8 @@ export const useSanidad = () => {
       })
       await refetchTratamientos()
       await refetchActivos()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.eliminarTratamiento }
     } catch (error) {
       return { success: false, error: error.message }
@@ -450,6 +474,8 @@ export const useSanidad = () => {
       })
       await refetchTiemposRetiro()
       await refetchAnimalesRetiro()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.actualizarTiempoRetiro }
     } catch (error) {
       return { success: false, error: error.message }
@@ -463,6 +489,8 @@ export const useSanidad = () => {
       })
       await refetchTiemposRetiro()
       await refetchAnimalesRetiro()
+      refetchResumen()
+      refetchCalendario()
       return { success: true, data: data?.eliminarTiempoRetiro }
     } catch (error) {
       return { success: false, error: error.message }
@@ -488,6 +516,8 @@ export const useSanidad = () => {
     registrosMastitis: registrosMastitis?.registrosMastitis || [],
     tiemposRetiro: tiemposRetiro?.tiemposRetiro || [],
     animalesEnRetiro: animalesEnRetiro?.animalesEnRetiro || [],
+    resumenSanidad: resumenSanidad?.resumenSanidad || null,
+    calendarioSanitario: calendarioSanitario?.calendarioSanitario || [],
 
     // Loading existentes
     loading: loadingTratamientos || loadingActivos || loadingDesparasitaciones || loadingDiagnosticos || loadingObservaciones,
@@ -498,6 +528,8 @@ export const useSanidad = () => {
     loadingMastitis,
     loadingTiemposRetiro,
     loadingAnimalesRetiro,
+    loadingResumen,
+    loadingCalendario,
 
     // Funciones de creación existentes
     crearTratamiento,
@@ -543,5 +575,7 @@ export const useSanidad = () => {
     refetchMastitis,
     refetchTiemposRetiro,
     refetchAnimalesRetiro,
+    refetchResumen,
+    refetchCalendario,
   }
 }

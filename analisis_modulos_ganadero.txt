@@ -1,0 +1,4322 @@
+﻿from django.conf import settings
+from django.db import models
+from fincas.models import Finca
+from catalogos.models import Raza, CategoriaAnimal
+
+
+class Parcela(models.Model):
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="parcelas"
+    )
+    nombre = models.CharField(max_length=150)
+    estado = models.CharField(max_length=50, default="ACTIVA")
+    imagen = models.ImageField(upload_to="parcelas/", blank=True, null=True)
+    tamano = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    capacidad_maxima = models.IntegerField(default=0)
+    tipo_pastura = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['finca'], name='par_finca_idx'),
+            models.Index(fields=['finca', 'estado'], name='par_finca_estado_idx'),
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+
+class Animal(models.Model):
+    SEXO_CHOICES = [
+        ("MACHO", "Macho"),
+        ("HEMBRA", "Hembra"),
+    ]
+
+    TIPO_PRODUCCION_CHOICES = [
+        ("CARNE", "Carne"),
+        ("LECHE", "Leche"),
+        ("DOBLE_PROPOSITO", "Doble propÃ³sito"),
+    ]
+
+    ESTADO_CHOICES = [
+        ("ACTIVO",    "Activo"),
+        ("VENDIDO",   "Vendido"),
+        ("MUERTO",    "Muerto"),
+        ("DESCARTE",  "Descarte"),
+        ("MATADERO",  "Matadero"),
+        ("BAJA",      "Baja"),      # â† agregado
+    ]
+
+    ORIGEN_CHOICES = [
+        ("NACIDO_FINCA", "Nacido en finca"),
+        ("COMPRADO",     "Comprado"),
+        ("DONADO",       "Donado"),
+    ]
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="animales"
+    )
+    raza = models.ForeignKey(
+        Raza,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    categoria = models.ForeignKey(
+        CategoriaAnimal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    padre = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hijos_como_padre"
+    )
+    madre = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hijos_como_madre"
+    )
+
+    nombre = models.CharField(max_length=150, blank=True, null=True)
+    nro_arete = models.CharField(max_length=100, unique=True)
+    sexo = models.CharField(max_length=20, choices=SEXO_CHOICES)
+    fecha_nacimiento = models.DateField(blank=True, null=True)
+    edad_ingreso_meses = models.IntegerField(default=0)
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default="ACTIVO")
+    imagen = models.ImageField(upload_to="animales/", blank=True, null=True)
+    peso = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    peso_nacimiento = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    fecha_ingreso = models.DateField(blank=True, null=True)
+    tipo_produccion = models.CharField(
+        max_length=30,
+        choices=TIPO_PRODUCCION_CHOICES,
+        default="DOBLE_PROPOSITO"
+    )
+    origen = models.CharField(max_length=30, choices=ORIGEN_CHOICES, default="NACIDO_FINCA")
+    color = models.CharField(max_length=100, blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+       indexes = [
+        models.Index(fields=['nombre']),
+        models.Index(fields=['nro_arete']),
+        models.Index(fields=['fecha_nacimiento']),
+        models.Index(fields=['fecha_ingreso']),
+        models.Index(fields=['fecha_registro']),
+        models.Index(fields=['estado']),
+        models.Index(fields=['sexo']),
+        models.Index(fields=['tipo_produccion']),
+        models.Index(fields=['origen']),
+
+        # Ãndices compuestos para consultas grandes por finca
+        models.Index(fields=['finca', 'estado'], name='ani_finca_estado_idx'),
+        models.Index(fields=['finca', 'fecha_registro'], name='ani_finca_freg_idx'),
+        models.Index(fields=['finca', 'fecha_nacimiento'], name='ani_finca_fnac_idx'),
+        models.Index(fields=['finca', 'fecha_ingreso'], name='ani_finca_fing_idx'),
+        models.Index(fields=['finca', 'sexo'], name='ani_finca_sexo_idx'),
+        models.Index(fields=['finca', 'tipo_produccion'], name='ani_finca_tipo_idx'),
+        models.Index(fields=['finca', 'origen'], name='ani_finca_origen_idx'),
+        models.Index(fields=['finca', 'raza', 'categoria'], name='ani_finca_raza_cat_idx'),
+        models.Index(fields=['finca', 'peso'], name='ani_finca_peso_idx'),
+    ]
+
+    def __str__(self):
+        return f"{self.nro_arete} - {self.nombre or ''}"
+
+
+class AnimalParcela(models.Model):
+    animal = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="historial_parcelas"
+    )
+    parcela = models.ForeignKey(
+        Parcela,
+        on_delete=models.CASCADE,
+        related_name="historial_animales"
+    )
+    fecha_ingreso = models.DateField()
+    fecha_salida = models.DateField(blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['animal', 'fecha_salida'], name='ap_animal_salida_idx'),
+            models.Index(fields=['parcela', 'fecha_salida'], name='ap_parcela_salida_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.animal} - {self.parcela}"
+
+
+class MovimientoAnimal(models.Model):
+    MOTIVO_CHOICES = [
+        ('ROTACION',             'RotaciÃ³n de potrero'),
+        ('SANIDAD',              'Razones sanitarias'),
+        ('ALIMENTACION',         'Manejo de alimentaciÃ³n'),
+        ('SEPARACION',           'SeparaciÃ³n por gestaciÃ³n/crÃ­a'),
+        ('VENTA',                'PreparaciÃ³n para venta'),
+        ('MANTENIMIENTO',        'Mantenimiento de parcela'),
+        ('TRANSFERENCIA_FINCA',  'Transferencia entre fincas'),
+        ('OTRO',                 'Otro'),
+    ]
+
+    finca = models.ForeignKey(
+        Finca, on_delete=models.CASCADE,
+        related_name='movimientos_animales'
+    )
+    animal = models.ForeignKey(
+        Animal, on_delete=models.CASCADE,
+        related_name='movimientos'
+    )
+    # Solo para movimientos de tipo TRANSFERENCIA_FINCA
+    finca_destino = models.ForeignKey(
+        Finca, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimientos_recibidos'
+    )
+    parcela_origen = models.ForeignKey(
+        Parcela, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='salidas_animales'
+    )
+    parcela_destino = models.ForeignKey(
+        Parcela, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='entradas_animales'
+    )
+    fecha_movimiento = models.DateField()
+    motivo = models.CharField(
+        max_length=100, blank=True, null=True,
+        choices=MOTIVO_CHOICES
+    )
+    observaciones = models.TextField(blank=True, null=True)
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimientos_registrados'
+    )
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_movimiento', '-fecha_registro']
+        indexes = [
+            models.Index(fields=['animal', 'fecha_movimiento'], name='mov_animal_fecha_idx'),
+            models.Index(fields=['finca', 'fecha_movimiento'],  name='mov_finca_fecha_idx'),
+            models.Index(fields=['parcela_origen'],             name='mov_origen_idx'),
+            models.Index(fields=['parcela_destino'],            name='mov_destino_idx'),
+        ]
+
+    def __str__(self):
+        origen = self.parcela_origen.nombre if self.parcela_origen else 'Sin parcela'
+        destino = self.parcela_destino.nombre if self.parcela_destino else 'Sin parcela'
+        return f"{self.animal} | {origen} â†’ {destino} ({self.fecha_movimiento})"
+# backend/animales/schema.py
+import graphene
+from graphene_django import DjangoObjectType
+from graphql_jwt.decorators import login_required
+from datetime import date
+
+from .models import Raza, CategoriaAnimal, Animal, Parcela, AnimalParcela, MovimientoAnimal
+from accounts.permissions import ids_fincas_visibles, ids_para_listado, validar_finca, puede_acceder_finca
+from graphql import GraphQLError
+
+
+def _get_registro_peso_type():
+    from produccion.schema import RegistroPesoType
+    return RegistroPesoType
+
+def _get_lactancia_type():
+    from produccion.schema import LactanciaType
+    return LactanciaType
+
+def _get_produccion_leche_type():
+    from produccion.schema import ProduccionLecheType
+    return ProduccionLecheType
+
+def _get_inseminacion_type():
+    from reproduccion.schema import InseminacionArtificialType
+    return InseminacionArtificialType
+
+def _get_diagnostico_prenez_type():
+    from reproduccion.schema import DiagnosticoPrenezType
+    return DiagnosticoPrenezType
+
+def _get_reproduccion_type():
+    from reproduccion.schema import ReproduccionType
+    return ReproduccionType
+
+def _get_vacunacion_type():
+    from sanidad.schema import VacunacionType
+    return VacunacionType
+
+def _get_tratamiento_type():
+    from sanidad.schema import TratamientoType
+    return TratamientoType
+
+def _get_detalle_venta_type():
+    from comercio.schema import DetalleVentaType
+    return DetalleVentaType
+
+def _get_muerte_baja_type():
+    from comercio.schema import MuerteBajaType
+    return MuerteBajaType
+
+def _get_detalle_transferencia_type():
+    from fincas.schema import DetalleTransferenciaType
+    return DetalleTransferenciaType
+
+
+# ==========================================
+# TYPES
+# ==========================================
+
+class AnimalesPaginadosType(graphene.ObjectType):
+    animales = graphene.List(lambda: AnimalType)
+    total = graphene.Int()
+    paginas = graphene.Int()
+    pagina_actual = graphene.Int()
+    tiene_siguiente = graphene.Boolean()
+    tiene_anterior = graphene.Boolean()
+
+
+class RazaType(DjangoObjectType):
+    class Meta:
+        model = Raza
+        fields = "__all__"
+
+
+class CategoriaAnimalType(DjangoObjectType):
+    class Meta:
+        model = CategoriaAnimal
+        fields = "__all__"
+
+
+class AnimalType(DjangoObjectType):
+    descendencia = graphene.List(lambda: AnimalType)
+
+    registros_peso = graphene.List(lambda: _get_registro_peso_type())
+    lactancias = graphene.List(lambda: _get_lactancia_type())
+    producciones_leche = graphene.List(lambda: _get_produccion_leche_type())
+
+    inseminaciones = graphene.List(lambda: _get_inseminacion_type())
+    diagnosticos_prenez = graphene.List(lambda: _get_diagnostico_prenez_type())
+    partos = graphene.List(lambda: _get_reproduccion_type())
+
+    vacunaciones = graphene.List(lambda: _get_vacunacion_type())
+    tratamientos = graphene.List(lambda: _get_tratamiento_type())
+
+    movimientos_parcela = graphene.List(lambda: AnimalParcelaType)
+
+    ventas = graphene.List(lambda: _get_detalle_venta_type())
+    bajas = graphene.List(lambda: _get_muerte_baja_type())
+
+    movimientos = graphene.List(lambda: MovimientoAnimalType)
+    transferencias_animal = graphene.List(lambda: _get_detalle_transferencia_type())
+
+    class Meta:
+        model = Animal
+        fields = "__all__"
+
+    def resolve_descendencia(self, info):
+        from django.db.models import Q
+        return Animal.objects.filter(
+            Q(padre_id=self.id) | Q(madre_id=self.id)
+        ).select_related('raza', 'categoria')
+
+    def resolve_registros_peso(self, info):
+        return self.registros_peso.all().order_by('-fecha_pesaje')
+
+    def resolve_lactancias(self, info):
+        return self.lactancias.all().order_by('-fecha_inicio')
+
+    def resolve_producciones_leche(self, info):
+        return self.producciones_leche.all().order_by('-fecha')
+
+    def resolve_inseminaciones(self, info):
+        return self.inseminacionartificial_eventos_reproductivos.all().select_related(
+            'reproductor'
+        ).order_by('-fecha')
+
+    def resolve_diagnosticos_prenez(self, info):
+        return self.diagnosticoprenez_eventos_reproductivos.all().select_related(
+            'veterinario'
+        ).order_by('-fecha')
+
+    def resolve_partos(self, info):
+        return self.reproducciones_como_madre.all().prefetch_related(
+            'crias'
+        ).order_by('-fecha_parto_real')
+
+    def resolve_vacunaciones(self, info):
+        return self.vacunaciones.all().select_related(
+            'vacuna', 'veterinario'
+        ).order_by('-fecha_aplicacion')
+
+    def resolve_tratamientos(self, info):
+        return self.tratamiento_eventos_sanitarios.all().select_related(
+            'medicamento', 'veterinario'
+        ).order_by('-fecha_inicio')
+
+    def resolve_movimientos_parcela(self, info):
+        return self.historial_parcelas.all().select_related(
+            'parcela'
+        ).order_by('-fecha_ingreso')
+
+    def resolve_ventas(self, info):
+        return self.detalles_venta.all().select_related(
+            'nota_venta', 'nota_venta__cliente'
+        ).order_by('-nota_venta__fecha_venta')
+
+    def resolve_bajas(self, info):
+        return self.muertes_bajas.all().order_by('-fecha_baja')
+
+    def resolve_movimientos(self, info):
+        return self.movimientos.all().select_related(
+            'parcela_origen', 'parcela_destino', 'registrado_por',
+            'finca', 'finca_destino',
+        ).order_by('-fecha_movimiento', '-fecha_registro')[:100]
+
+    def resolve_transferencias_animal(self, info):
+        return self.transferencias_detalle.all().select_related(
+            'transferencia__finca_origen',
+            'transferencia__finca_destino',
+            'parcela_origen',
+            'parcela_destino',
+        ).order_by('-transferencia__fecha_transferencia')
+
+
+class ParcelaType(DjangoObjectType):
+    animalesActuales = graphene.List('animales.schema.AnimalParcelaType')
+    ocupacionActual = graphene.Int()
+
+    class Meta:
+        model = Parcela
+        fields = "__all__"
+
+    def resolve_animalesActuales(self, info):
+        return self.historial_animales.filter(fecha_salida__isnull=True)
+
+    def resolve_ocupacionActual(self, info):
+        if hasattr(self, 'ocupacion_actual'):
+            return self.ocupacion_actual
+        return self.historial_animales.filter(fecha_salida__isnull=True).count()
+
+
+class AnimalParcelaType(DjangoObjectType):
+    class Meta:
+        model = AnimalParcela
+        fields = "__all__"
+
+
+class MovimientoAnimalType(DjangoObjectType):
+    registrado_por_nombre = graphene.String()
+    motivo_display = graphene.String()
+    tipo = graphene.String()  # 'FINCA' | 'PARCELA'
+
+    class Meta:
+        model = MovimientoAnimal
+        fields = "__all__"
+
+    def resolve_registrado_por_nombre(self, info):
+        if self.registrado_por:
+            nombre = f"{self.registrado_por.first_name} {self.registrado_por.last_name}".strip()
+            return nombre or self.registrado_por.username
+        return None
+
+    def resolve_motivo_display(self, info):
+        return self.get_motivo_display() if self.motivo else None
+
+    def resolve_tipo(self, info):
+        return 'FINCA' if self.motivo == 'TRANSFERENCIA_FINCA' else 'PARCELA'
+
+
+class ConteoAnimalGrupoType(graphene.ObjectType):
+    id = graphene.ID()
+    nombre = graphene.String()
+    total = graphene.Int()
+
+
+class ReporteAnimalGrupalType(graphene.ObjectType):
+    total = graphene.Int()
+    machos = graphene.Int()
+    hembras = graphene.Int()
+    activos = graphene.Int()
+    vendidos = graphene.Int()
+    muertos = graphene.Int()
+    descarte = graphene.Int()
+    matadero = graphene.Int()
+    baja = graphene.Int()
+    peso_promedio = graphene.Decimal()
+    peso_total = graphene.Decimal()
+    peso_minimo = graphene.Decimal()
+    peso_maximo = graphene.Decimal()
+    por_estado = graphene.List(ConteoAnimalGrupoType)
+    por_sexo = graphene.List(ConteoAnimalGrupoType)
+    por_raza = graphene.List(ConteoAnimalGrupoType)
+    por_categoria = graphene.List(ConteoAnimalGrupoType)
+    descripcion = graphene.String()
+
+
+class ReporteAnimalIndividualType(graphene.ObjectType):
+    animal = graphene.Field(AnimalType)
+    parcela_actual = graphene.Field(ParcelaType)
+    movimiento_actual = graphene.Field(AnimalParcelaType)
+    edad_meses = graphene.Int()
+    dias_en_finca = graphene.Int()
+    total_movimientos_parcela = graphene.Int()
+    descripcion = graphene.String()
+
+
+class ParcelasPaginadasType(graphene.ObjectType):
+    results = graphene.List(ParcelaType)
+    count = graphene.Int()
+    page = graphene.Int()
+    page_size = graphene.Int()
+    total_pages = graphene.Int()
+    has_next = graphene.Boolean()
+    has_previous = graphene.Boolean()
+
+
+class AnimalExportItemType(graphene.ObjectType):
+    nro_arete = graphene.String()
+    nombre = graphene.String()
+    sexo = graphene.String()
+    raza_nombre = graphene.String()
+    categoria_nombre = graphene.String()
+    peso = graphene.Decimal()
+    fecha_nacimiento = graphene.Date()
+    edad_meses = graphene.Int()
+    tipo_produccion = graphene.String()
+    origen = graphene.String()
+    estado = graphene.String()
+    parcela_actual = graphene.String()
+    fecha_ingreso = graphene.Date()
+    padre_arete = graphene.String()
+    madre_arete = graphene.String()
+    observaciones = graphene.String()
+    # Campos para reporte de vendidos
+    fecha_venta = graphene.Date()
+    cliente_nombre = graphene.String()
+    peso_venta = graphene.Decimal()
+    precio_unitario = graphene.Decimal()
+    sub_total = graphene.Decimal()
+    guia_salida = graphene.String()
+    # Campos para reporte de bajas/muertes
+    fecha_baja = graphene.Date()
+    tipo_baja = graphene.String()
+    causa_baja = graphene.String()
+    peso_estimado_baja = graphene.Decimal()
+    descripcion_baja = graphene.String()
+
+
+class ExportarAnimalesResultType(graphene.ObjectType):
+    items = graphene.List(AnimalExportItemType)
+    total = graphene.Int()
+    mensaje = graphene.String()
+
+
+# ==========================================
+# HELPER DE FILTROS (funciÃ³n auxiliar fuera de la clase)
+# ==========================================
+
+def aplicar_filtros_animales(
+    qs,
+    finca_id=None,
+    buscar=None,
+    estado=None,
+    raza_id=None,
+    categoria_id=None,
+    sexo=None,
+    tipo_produccion=None,
+    origen=None,
+    peso_min=None,
+    peso_max=None,
+    fecha_nacimiento_desde=None,
+    fecha_nacimiento_hasta=None,
+    fecha_ingreso_desde=None,
+    fecha_ingreso_hasta=None,
+    fecha_registro_desde=None,
+    fecha_registro_hasta=None,
+):
+    from django.db.models import Q
+    from datetime import datetime, time
+    from django.conf import settings
+    from django.utils import timezone
+
+    def inicio_dia(fecha):
+        dt = datetime.combine(fecha, time.min)
+        if settings.USE_TZ:
+            return timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt
+
+    def fin_dia(fecha):
+        dt = datetime.combine(fecha, time.max)
+        if settings.USE_TZ:
+            return timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt
+
+    if finca_id:
+        qs = qs.filter(finca_id=finca_id)
+
+    if buscar:
+        qs = qs.filter(
+            Q(nombre__icontains=buscar) |
+            Q(nro_arete__icontains=buscar) |
+            Q(raza__nombre__icontains=buscar) |
+            Q(categoria__nombre__icontains=buscar) |
+            Q(estado__icontains=buscar) |
+            Q(sexo__icontains=buscar) |
+            Q(tipo_produccion__icontains=buscar) |
+            Q(origen__icontains=buscar) |
+            Q(observaciones__icontains=buscar)
+        )
+
+    if estado and estado not in ('', 'TODOS'):
+        qs = qs.filter(estado=estado)
+
+    if raza_id:
+        qs = qs.filter(raza_id=raza_id)
+
+    if categoria_id:
+        qs = qs.filter(categoria_id=categoria_id)
+
+    if sexo and sexo not in ('', 'TODOS'):
+        qs = qs.filter(sexo=sexo)
+
+    if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+        qs = qs.filter(tipo_produccion=tipo_produccion)
+
+    if origen and origen not in ('', 'TODOS'):
+        qs = qs.filter(origen=origen)
+
+    if peso_min is not None:
+        qs = qs.filter(peso__gte=peso_min)
+
+    if peso_max is not None:
+        qs = qs.filter(peso__lte=peso_max)
+
+    if fecha_nacimiento_desde:
+        qs = qs.filter(fecha_nacimiento__gte=fecha_nacimiento_desde)
+
+    if fecha_nacimiento_hasta:
+        qs = qs.filter(fecha_nacimiento__lte=fecha_nacimiento_hasta)
+
+    if fecha_ingreso_desde:
+        qs = qs.filter(fecha_ingreso__gte=fecha_ingreso_desde)
+
+    if fecha_ingreso_hasta:
+        qs = qs.filter(fecha_ingreso__lte=fecha_ingreso_hasta)
+
+    if fecha_registro_desde:
+        qs = qs.filter(fecha_registro__gte=inicio_dia(fecha_registro_desde))
+
+    if fecha_registro_hasta:
+        qs = qs.filter(fecha_registro__lte=fin_dia(fecha_registro_hasta))
+
+    return qs
+
+
+# ==========================================
+# QUERY
+# ==========================================
+
+class Query(graphene.ObjectType):
+    # --- Animales bÃ¡sicos ---
+    razas = graphene.List(RazaType)
+    categorias_animales = graphene.List(CategoriaAnimalType)
+    all_animales = graphene.List(AnimalType)
+    animal_by_id = graphene.Field(AnimalType, id=graphene.ID(required=True))
+    animal_by_arete = graphene.Field(AnimalType, nro_arete=graphene.String(required=True))
+    animales_activos = graphene.List(AnimalType, finca_id=graphene.ID(required=True))
+
+    # --- GenealogÃ­a ---
+    animal_detalle = graphene.Field(AnimalType, id=graphene.ID(required=True))
+    animales_machos_para_padre = graphene.List(
+        AnimalType,
+        finca_id=graphene.ID(required=True),
+        excluir_id=graphene.ID(),
+    )
+    animales_hembras_para_madre = graphene.List(
+        AnimalType,
+        finca_id=graphene.ID(required=True),
+        excluir_id=graphene.ID(),
+    )
+
+    # --- Animales paginados con filtros completos ---
+    animales_paginados = graphene.Field(
+        AnimalesPaginadosType,
+        finca_id=graphene.ID(),
+        pagina=graphene.Int(),
+        por_pagina=graphene.Int(),
+        buscar=graphene.String(),
+        estado=graphene.String(),
+        ordenar=graphene.String(),
+        raza_id=graphene.ID(),
+        categoria_id=graphene.ID(),
+        sexo=graphene.String(),
+        tipo_produccion=graphene.String(),
+        origen=graphene.String(),
+        peso_min=graphene.Decimal(),
+        peso_max=graphene.Decimal(),
+        fecha_nacimiento_desde=graphene.Date(),
+        fecha_nacimiento_hasta=graphene.Date(),
+        fecha_ingreso_desde=graphene.Date(),
+        fecha_ingreso_hasta=graphene.Date(),
+        fecha_registro_desde=graphene.Date(),
+        fecha_registro_hasta=graphene.Date(),
+    )
+
+    # --- Parcelas ---
+    parcelas = graphene.List(ParcelaType, finca_id=graphene.ID(required=True))
+    parcela = graphene.Field(ParcelaType, id=graphene.ID(required=True))
+    animales_en_parcela = graphene.List(AnimalParcelaType, parcela_id=graphene.ID(required=True))
+    animales_actuales_parcela = graphene.List(AnimalParcelaType, parcela_id=graphene.ID(required=True))
+    parcelas_paginadas = graphene.Field(
+        ParcelasPaginadasType,
+        finca_id=graphene.ID(required=True),
+        search=graphene.String(),
+        estado=graphene.String(),
+        temporal=graphene.String(),
+        ordering=graphene.String(),
+        page=graphene.Int(),
+        page_size=graphene.Int(),
+    )
+    parcelas_disponibles_para_movimiento = graphene.List(
+        ParcelaType,
+        finca_id=graphene.ID(required=True),
+        animal_id=graphene.ID(required=True),
+    )
+
+    # --- Movimientos ---
+    movimientos_animal = graphene.List(
+        MovimientoAnimalType,
+        animal_id=graphene.ID(required=True),
+        limit=graphene.Int(),
+    )
+    movimientos_finca = graphene.List(
+        MovimientoAnimalType,
+        finca_id=graphene.ID(required=True),
+        animal_id=graphene.ID(),
+        desde=graphene.Date(),
+        hasta=graphene.Date(),
+        motivo=graphene.String(),
+    )
+
+    # --- Reportes ---
+    reporte_animal_individual = graphene.Field(
+        ReporteAnimalIndividualType,
+        id=graphene.ID(required=True),
+    )
+    reporte_animales_grupal = graphene.Field(
+        ReporteAnimalGrupalType,
+        finca_id=graphene.ID(required=True),
+        buscar=graphene.String(),
+        estado=graphene.String(),
+        raza_id=graphene.ID(),
+        categoria_id=graphene.ID(),
+        sexo=graphene.String(),
+        tipo_produccion=graphene.String(),
+        origen=graphene.String(),
+        peso_min=graphene.Decimal(),
+        peso_max=graphene.Decimal(),
+        fecha_nacimiento_desde=graphene.Date(),
+        fecha_nacimiento_hasta=graphene.Date(),
+        fecha_ingreso_desde=graphene.Date(),
+        fecha_ingreso_hasta=graphene.Date(),
+        fecha_registro_desde=graphene.Date(),
+        fecha_registro_hasta=graphene.Date(),
+    )
+    exportar_animales = graphene.Field(
+        ExportarAnimalesResultType,
+        finca_id=graphene.ID(required=True),
+        tipo_reporte=graphene.String(),
+        estado=graphene.String(),
+        sexo=graphene.String(),
+        raza_id=graphene.ID(),
+        categoria_id=graphene.ID(),
+        tipo_produccion=graphene.String(),
+        origen=graphene.String(),
+        parcela_id=graphene.ID(),
+        fecha_nacimiento_desde=graphene.Date(),
+        fecha_nacimiento_hasta=graphene.Date(),
+        fecha_ingreso_desde=graphene.Date(),
+        fecha_ingreso_hasta=graphene.Date(),
+        fecha_venta_desde=graphene.Date(),
+        fecha_venta_hasta=graphene.Date(),
+        fecha_baja_desde=graphene.Date(),
+        fecha_baja_hasta=graphene.Date(),
+        limite=graphene.Int(),
+        orden=graphene.String(),
+    )
+
+    # ---- resolvers ----
+
+    def resolve_razas(self, info):
+        return Raza.objects.all()
+
+    def resolve_categorias_animales(self, info):
+        return CategoriaAnimal.objects.all()
+
+    @login_required
+    def resolve_all_animales(self, info):
+        return Animal.objects.filter(finca_id__in=ids_para_listado(info.context.user))
+
+    @login_required
+    def resolve_animal_by_id(self, info, id):
+        animal = Animal.objects.filter(id=id).first()
+        if animal and not puede_acceder_finca(info.context.user, animal.finca_id):
+            raise GraphQLError("No tiene acceso a este animal.")
+        return animal
+
+    @login_required
+    def resolve_animal_by_arete(self, info, nro_arete):
+        animal = Animal.objects.filter(
+            nro_arete=nro_arete, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).first()
+        return animal
+
+    @login_required
+    def resolve_animales_activos(self, info, finca_id):
+        validar_finca(info.context.user, finca_id)
+        return Animal.objects.filter(finca_id=finca_id, estado='ACTIVO')
+
+    @login_required
+    def resolve_animal_detalle(self, info, id):
+        if not Animal.objects.filter(
+            id=id, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).exists():
+            raise GraphQLError("No tiene acceso a este animal.")
+        return Animal.objects.select_related(
+            'raza', 'categoria',
+            'padre', 'padre__raza', 'padre__categoria',
+            'madre', 'madre__raza', 'madre__categoria',
+        ).prefetch_related(
+            'registros_peso',
+            'lactancias',
+            'producciones_leche',
+            'inseminacionartificial_eventos_reproductivos',
+            'inseminacionartificial_eventos_reproductivos__reproductor',
+            'diagnosticoprenez_eventos_reproductivos',
+            'diagnosticoprenez_eventos_reproductivos__veterinario',
+            'reproducciones_como_madre',
+            'reproducciones_como_madre__crias',
+            'vacunaciones',
+            'vacunaciones__vacuna',
+            'vacunaciones__veterinario',
+            'tratamiento_eventos_sanitarios',
+            'tratamiento_eventos_sanitarios__medicamento',
+            'tratamiento_eventos_sanitarios__veterinario',
+            'historial_parcelas',
+            'historial_parcelas__parcela',
+            'detalles_venta',
+            'detalles_venta__nota_venta',
+            'detalles_venta__nota_venta__cliente',
+            'muertes_bajas',
+            'transferencias_detalle',
+            'transferencias_detalle__transferencia',
+            'transferencias_detalle__transferencia__finca_origen',
+            'transferencias_detalle__transferencia__finca_destino',
+            'transferencias_detalle__parcela_origen',
+            'transferencias_detalle__parcela_destino',
+        ).get(id=id)
+
+    @login_required
+    def resolve_animales_machos_para_padre(self, info, finca_id, excluir_id=None):
+        validar_finca(info.context.user, finca_id)
+        qs = Animal.objects.filter(
+            finca_id=finca_id, sexo='MACHO'
+        ).select_related('raza', 'categoria')
+        if excluir_id:
+            qs = qs.exclude(id=excluir_id)
+        return qs.order_by('nro_arete')
+
+    @login_required
+    def resolve_animales_hembras_para_madre(self, info, finca_id, excluir_id=None):
+        validar_finca(info.context.user, finca_id)
+        qs = Animal.objects.filter(
+            finca_id=finca_id, sexo='HEMBRA'
+        ).select_related('raza', 'categoria')
+        if excluir_id:
+            qs = qs.exclude(id=excluir_id)
+        return qs.order_by('nro_arete')
+
+    def resolve_animales_paginados(
+        self, info,
+        finca_id=None, pagina=1, por_pagina=10,
+        buscar=None, estado=None, ordenar=None,
+        raza_id=None, categoria_id=None,
+        sexo=None, tipo_produccion=None, origen=None,
+        peso_min=None, peso_max=None,
+        fecha_nacimiento_desde=None, fecha_nacimiento_hasta=None,
+        fecha_ingreso_desde=None, fecha_ingreso_hasta=None,
+        fecha_registro_desde=None, fecha_registro_hasta=None,
+    ):
+        from django.db.models import IntegerField, Value, Case, When
+
+        user = info.context.user
+        if finca_id:
+            validar_finca(user, finca_id)
+            qs = Animal.objects.select_related('finca', 'raza', 'categoria', 'padre', 'madre')
+        else:
+            qs = Animal.objects.filter(
+                finca_id__in=ids_fincas_visibles(user)
+            ).select_related('finca', 'raza', 'categoria', 'padre', 'madre')
+
+        qs = aplicar_filtros_animales(
+            qs,
+            finca_id=finca_id,
+            buscar=buscar,
+            estado=estado,
+            raza_id=raza_id,
+            categoria_id=categoria_id,
+            sexo=sexo,
+            tipo_produccion=tipo_produccion,
+            origen=origen,
+            peso_min=peso_min,
+            peso_max=peso_max,
+            fecha_nacimiento_desde=fecha_nacimiento_desde,
+            fecha_nacimiento_hasta=fecha_nacimiento_hasta,
+            fecha_ingreso_desde=fecha_ingreso_desde,
+            fecha_ingreso_hasta=fecha_ingreso_hasta,
+            fecha_registro_desde=fecha_registro_desde,
+            fecha_registro_hasta=fecha_registro_hasta,
+        )
+
+        if ordenar == 'arete_az':
+            qs = qs.order_by('nro_arete')
+        elif ordenar == 'arete_za':
+            qs = qs.order_by('-nro_arete')
+        elif ordenar == 'nombre_az':
+            qs = qs.order_by('nombre')
+        elif ordenar == 'nombre_za':
+            qs = qs.order_by('-nombre')
+        elif ordenar == 'mayor_peso':
+            qs = qs.order_by('-peso', '-fecha_registro')
+        elif ordenar == 'menor_peso':
+            qs = qs.order_by('peso', '-fecha_registro')
+        elif ordenar == 'mayor_edad':
+            qs = qs.order_by('fecha_nacimiento', '-fecha_registro')
+        elif ordenar == 'menor_edad':
+            qs = qs.order_by('-fecha_nacimiento', '-fecha_registro')
+        elif ordenar in ('activos_primero', 'bajas_final'):
+            qs = qs.annotate(
+                orden_estado=Case(
+                    When(estado='ACTIVO', then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            ).order_by('orden_estado', '-fecha_registro')
+        elif ordenar == 'antiguos':
+            qs = qs.order_by('fecha_registro')
+        else:
+            qs = qs.order_by('-fecha_registro')
+
+        por_pagina = max(1, min(por_pagina or 10, 200))
+        total = qs.count()
+        paginas = max(1, (total + por_pagina - 1) // por_pagina)
+        pagina = max(1, min(pagina or 1, paginas))
+        offset = (pagina - 1) * por_pagina
+
+        return AnimalesPaginadosType(
+            animales=list(qs[offset:offset + por_pagina]),
+            total=total,
+            paginas=paginas,
+            pagina_actual=pagina,
+            tiene_siguiente=pagina < paginas,
+            tiene_anterior=pagina > 1,
+        )
+
+    @login_required
+    def resolve_parcelas(self, info, finca_id):
+        validar_finca(info.context.user, finca_id)
+        return Parcela.objects.filter(finca_id=finca_id)
+
+    @login_required
+    def resolve_parcela(self, info, id):
+        parcela = Parcela.objects.filter(id=id).first()
+        if parcela and not puede_acceder_finca(info.context.user, parcela.finca_id):
+            raise GraphQLError("No tiene acceso a esta parcela.")
+        return parcela
+
+    @login_required
+    def resolve_animales_en_parcela(self, info, parcela_id):
+        if not Parcela.objects.filter(
+            id=parcela_id, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).exists():
+            raise GraphQLError("No tiene acceso a esta parcela.")
+        return AnimalParcela.objects.filter(parcela_id=parcela_id)
+
+    def resolve_animales_actuales_parcela(self, info, parcela_id):
+        return AnimalParcela.objects.filter(
+            parcela_id=parcela_id, fecha_salida__isnull=True
+        )
+
+    @login_required
+    def resolve_parcelas_paginadas(
+        self, info,
+        finca_id,
+        search=None,
+        estado=None,
+        temporal=None,
+        ordering=None,
+        page=1,
+        page_size=10,
+    ):
+        validar_finca(info.context.user, finca_id)
+        from django.db.models import Count, Q, OuterRef, Subquery, IntegerField, Value
+        from django.db.models.functions import Coalesce
+
+        ocupacion_sq = AnimalParcela.objects.filter(
+            parcela=OuterRef('pk'),
+            fecha_salida__isnull=True,
+        ).values('parcela').annotate(cnt=Count('id')).values('cnt')
+
+        qs = Parcela.objects.filter(finca_id=finca_id).annotate(
+            ocupacion_actual=Coalesce(
+                Subquery(ocupacion_sq, output_field=IntegerField()),
+                Value(0),
+            )
+        )
+
+        if search:
+            qs = qs.filter(
+                Q(nombre__icontains=search) |
+                Q(tipo_pastura__icontains=search)
+            )
+
+        if estado and estado not in ('', 'TODOS'):
+            qs = qs.filter(estado=estado)
+
+        if ordering == 'nombre_az':
+            qs = qs.order_by('nombre')
+        elif ordering == 'nombre_za':
+            qs = qs.order_by('-nombre')
+        elif ordering == 'mayor_capacidad':
+            qs = qs.order_by('-capacidad_maxima')
+        elif ordering == 'menor_capacidad':
+            qs = qs.order_by('capacidad_maxima')
+        else:
+            qs = qs.order_by('nombre')
+
+        page_size = max(1, min(page_size or 10, 100))
+        count = qs.count()
+        total_pages = max(1, (count + page_size - 1) // page_size)
+        page = max(1, min(page or 1, total_pages))
+        offset = (page - 1) * page_size
+
+        return ParcelasPaginadasType(
+            results=list(qs[offset:offset + page_size]),
+            count=count,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1,
+        )
+
+    @login_required
+    def resolve_parcelas_disponibles_para_movimiento(self, info, finca_id, animal_id):
+        validar_finca(info.context.user, finca_id)
+        from django.db.models import Count, Q, OuterRef, Subquery, IntegerField, Value, F
+        from django.db.models.functions import Coalesce
+
+        parcela_actual_id = AnimalParcela.objects.filter(
+            animal_id=animal_id,
+            fecha_salida__isnull=True,
+        ).values_list('parcela_id', flat=True).first()
+
+        ocupacion_sq = AnimalParcela.objects.filter(
+            parcela=OuterRef('pk'),
+            fecha_salida__isnull=True,
+        ).values('parcela').annotate(cnt=Count('id')).values('cnt')
+
+        qs = Parcela.objects.filter(
+            finca_id=finca_id,
+            estado__in=['LIBRE', 'OCUPADO'],
+        ).annotate(
+            ocupacion_actual=Coalesce(
+                Subquery(ocupacion_sq, output_field=IntegerField()),
+                Value(0),
+            )
+        ).filter(
+            Q(capacidad_maxima=0) | Q(ocupacion_actual__lt=F('capacidad_maxima'))
+        )
+
+        if parcela_actual_id:
+            qs = qs.exclude(id=parcela_actual_id)
+
+        return qs.order_by('nombre')
+
+    @login_required
+    def resolve_movimientos_animal(self, info, animal_id, limit=50):
+        if not Animal.objects.filter(
+            id=animal_id, finca_id__in=ids_fincas_visibles(info.context.user)
+        ).exists():
+            raise GraphQLError("No tiene acceso a este animal.")
+        qs = MovimientoAnimal.objects.filter(
+            animal_id=animal_id
+        ).select_related(
+            'parcela_origen', 'parcela_destino', 'registrado_por', 'animal'
+        ).order_by('-fecha_movimiento', '-fecha_registro')
+        if limit:
+            qs = qs[:limit]
+        return qs
+
+    @login_required
+    def resolve_movimientos_finca(
+        self, info, finca_id,
+        animal_id=None, desde=None, hasta=None, motivo=None,
+    ):
+        validar_finca(info.context.user, finca_id)
+        qs = MovimientoAnimal.objects.filter(
+            finca_id=finca_id
+        ).select_related(
+            'animal', 'parcela_origen', 'parcela_destino', 'registrado_por'
+        )
+        if animal_id:
+            qs = qs.filter(animal_id=animal_id)
+        if desde:
+            qs = qs.filter(fecha_movimiento__gte=desde)
+        if hasta:
+            qs = qs.filter(fecha_movimiento__lte=hasta)
+        if motivo:
+            qs = qs.filter(motivo=motivo)
+        return qs.order_by('-fecha_movimiento', '-fecha_registro')
+
+    @login_required
+    def resolve_reporte_animal_individual(self, info, id):
+        from datetime import date as hoy_date
+
+        animal = Animal.objects.select_related(
+            'raza', 'categoria', 'padre', 'madre'
+        ).get(id=id)
+        if not puede_acceder_finca(info.context.user, animal.finca_id):
+            raise GraphQLError("No tiene acceso a este animal.")
+
+        movimiento_actual = AnimalParcela.objects.filter(
+            animal=animal,
+            fecha_salida__isnull=True,
+        ).select_related('parcela').order_by('-fecha_ingreso').first()
+
+        parcela_actual = movimiento_actual.parcela if movimiento_actual else None
+
+        hoy = hoy_date.today()
+
+        edad_meses = None
+        if animal.fecha_nacimiento:
+            edad_meses = (hoy - animal.fecha_nacimiento).days // 30
+
+        dias_en_finca = None
+        if animal.fecha_ingreso:
+            dias_en_finca = (hoy - animal.fecha_ingreso).days
+        elif animal.fecha_registro:
+            dias_en_finca = (hoy - animal.fecha_registro.date()).days
+
+        total_movimientos_parcela = AnimalParcela.objects.filter(animal=animal).count()
+
+        descripcion = (
+            f"Ficha individual del animal {animal.nro_arete}"
+            + (f" ({animal.nombre})" if animal.nombre else "")
+            + f". Estado: {animal.estado}."
+            + (f" Edad aproximada: {edad_meses} meses." if edad_meses is not None else "")
+            + (f" Parcela actual: {parcela_actual.nombre}." if parcela_actual else " Sin parcela asignada.")
+        )
+
+        return ReporteAnimalIndividualType(
+            animal=animal,
+            parcela_actual=parcela_actual,
+            movimiento_actual=movimiento_actual,
+            edad_meses=edad_meses,
+            dias_en_finca=dias_en_finca,
+            total_movimientos_parcela=total_movimientos_parcela,
+            descripcion=descripcion,
+        )
+
+    @login_required
+    def resolve_reporte_animales_grupal(
+        self, info,
+        finca_id,
+        buscar=None,
+        estado=None,
+        raza_id=None,
+        categoria_id=None,
+        sexo=None,
+        tipo_produccion=None,
+        origen=None,
+        peso_min=None,
+        peso_max=None,
+        fecha_nacimiento_desde=None,
+        fecha_nacimiento_hasta=None,
+        fecha_ingreso_desde=None,
+        fecha_ingreso_hasta=None,
+        fecha_registro_desde=None,
+        fecha_registro_hasta=None,
+    ):
+        validar_finca(info.context.user, finca_id)
+        from django.db.models import Count, Avg, Sum, Min, Max
+        from decimal import Decimal
+
+        qs = Animal.objects.select_related('raza', 'categoria')
+
+        qs = aplicar_filtros_animales(
+            qs,
+            finca_id=finca_id,
+            buscar=buscar,
+            estado=estado,
+            raza_id=raza_id,
+            categoria_id=categoria_id,
+            sexo=sexo,
+            tipo_produccion=tipo_produccion,
+            origen=origen,
+            peso_min=peso_min,
+            peso_max=peso_max,
+            fecha_nacimiento_desde=fecha_nacimiento_desde,
+            fecha_nacimiento_hasta=fecha_nacimiento_hasta,
+            fecha_ingreso_desde=fecha_ingreso_desde,
+            fecha_ingreso_hasta=fecha_ingreso_hasta,
+            fecha_registro_desde=fecha_registro_desde,
+            fecha_registro_hasta=fecha_registro_hasta,
+        )
+
+        total = qs.count()
+
+        agg = qs.aggregate(
+            peso_promedio=Avg('peso'),
+            peso_total=Sum('peso'),
+            peso_minimo=Min('peso'),
+            peso_maximo=Max('peso'),
+        )
+
+        def contar_estado(valor):
+            return qs.filter(estado=valor).count()
+
+        machos = qs.filter(sexo='MACHO').count()
+        hembras = qs.filter(sexo='HEMBRA').count()
+
+        por_estado = [
+            ConteoAnimalGrupoType(
+                id=row['estado'],
+                nombre=row['estado'] or 'Sin estado',
+                total=row['total'],
+            )
+            for row in qs.values('estado').annotate(total=Count('id')).order_by('-total')
+        ]
+
+        por_sexo = [
+            ConteoAnimalGrupoType(
+                id=row['sexo'],
+                nombre=row['sexo'] or 'Sin sexo',
+                total=row['total'],
+            )
+            for row in qs.values('sexo').annotate(total=Count('id')).order_by('-total')
+        ]
+
+        por_raza = [
+            ConteoAnimalGrupoType(
+                id=row['raza_id'],
+                nombre=row['raza__nombre'] or 'Sin raza',
+                total=row['total'],
+            )
+            for row in qs.values('raza_id', 'raza__nombre').annotate(total=Count('id')).order_by('-total')
+        ]
+
+        por_categoria = [
+            ConteoAnimalGrupoType(
+                id=row['categoria_id'],
+                nombre=row['categoria__nombre'] or 'Sin categorÃ­a',
+                total=row['total'],
+            )
+            for row in qs.values('categoria_id', 'categoria__nombre').annotate(total=Count('id')).order_by('-total')
+        ]
+
+        descripcion = (
+            f"El reporte contiene {total} animales filtrados. "
+            f"Hay {machos} machos y {hembras} hembras. "
+            f"El peso promedio es {agg['peso_promedio'] or 0} kg. "
+            f"Este resumen se calcula directamente desde PostgreSQL, "
+            f"sin cargar todos los animales en memoria."
+        )
+
+        return ReporteAnimalGrupalType(
+            total=total,
+            machos=machos,
+            hembras=hembras,
+            activos=contar_estado('ACTIVO'),
+            vendidos=contar_estado('VENDIDO'),
+            muertos=contar_estado('MUERTO'),
+            descarte=contar_estado('DESCARTE'),
+            matadero=contar_estado('MATADERO'),
+            baja=contar_estado('BAJA'),
+            peso_promedio=agg['peso_promedio'] or Decimal('0.00'),
+            peso_total=agg['peso_total'] or Decimal('0.00'),
+            peso_minimo=agg['peso_minimo'] or Decimal('0.00'),
+            peso_maximo=agg['peso_maximo'] or Decimal('0.00'),
+            por_estado=por_estado,
+            por_sexo=por_sexo,
+            por_raza=por_raza,
+            por_categoria=por_categoria,
+            descripcion=descripcion,
+        )
+
+    @login_required
+    def resolve_exportar_animales(
+        self, info,
+        finca_id,
+        tipo_reporte=None,
+        estado=None,
+        sexo=None,
+        raza_id=None,
+        categoria_id=None,
+        tipo_produccion=None,
+        origen=None,
+        parcela_id=None,
+        fecha_nacimiento_desde=None,
+        fecha_nacimiento_hasta=None,
+        fecha_ingreso_desde=None,
+        fecha_ingreso_hasta=None,
+        fecha_venta_desde=None,
+        fecha_venta_hasta=None,
+        fecha_baja_desde=None,
+        fecha_baja_hasta=None,
+        limite=None,
+        orden=None,
+    ):
+        validar_finca(info.context.user, finca_id)
+        from datetime import date as hoy_date
+        from comercio.models import DetalleVenta, MuerteBaja
+
+        limite = max(1, min(limite or 500, 5000))
+        tipo_reporte = tipo_reporte or 'INVENTARIO'
+        items = []
+
+        def calcular_edad_meses(fecha_nac):
+            if not fecha_nac:
+                return None
+            return (hoy_date.today() - fecha_nac).days // 30
+
+        def _filtrar_animal_qs(qs):
+            if sexo and sexo not in ('', 'TODOS'):
+                qs = qs.filter(sexo=sexo)
+            if raza_id:
+                qs = qs.filter(raza_id=raza_id)
+            if categoria_id:
+                qs = qs.filter(categoria_id=categoria_id)
+            if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+                qs = qs.filter(tipo_produccion=tipo_produccion)
+            if origen and origen not in ('', 'TODOS'):
+                qs = qs.filter(origen=origen)
+            if fecha_nacimiento_desde:
+                qs = qs.filter(fecha_nacimiento__gte=fecha_nacimiento_desde)
+            if fecha_nacimiento_hasta:
+                qs = qs.filter(fecha_nacimiento__lte=fecha_nacimiento_hasta)
+            if fecha_ingreso_desde:
+                qs = qs.filter(fecha_ingreso__gte=fecha_ingreso_desde)
+            if fecha_ingreso_hasta:
+                qs = qs.filter(fecha_ingreso__lte=fecha_ingreso_hasta)
+            return qs
+
+        if tipo_reporte == 'VENDIDOS':
+            qs = DetalleVenta.objects.filter(
+                nota_venta__finca_id=finca_id
+            ).select_related(
+                'animal', 'animal__raza', 'animal__categoria',
+                'animal__padre', 'animal__madre',
+                'nota_venta', 'nota_venta__cliente'
+            )
+            if fecha_venta_desde:
+                qs = qs.filter(nota_venta__fecha_venta__gte=fecha_venta_desde)
+            if fecha_venta_hasta:
+                qs = qs.filter(nota_venta__fecha_venta__lte=fecha_venta_hasta)
+            if sexo and sexo not in ('', 'TODOS'):
+                qs = qs.filter(animal__sexo=sexo)
+            if raza_id:
+                qs = qs.filter(animal__raza_id=raza_id)
+            if categoria_id:
+                qs = qs.filter(animal__categoria_id=categoria_id)
+            if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+                qs = qs.filter(animal__tipo_produccion=tipo_produccion)
+            if origen and origen not in ('', 'TODOS'):
+                qs = qs.filter(animal__origen=origen)
+            if fecha_nacimiento_desde:
+                qs = qs.filter(animal__fecha_nacimiento__gte=fecha_nacimiento_desde)
+            if fecha_nacimiento_hasta:
+                qs = qs.filter(animal__fecha_nacimiento__lte=fecha_nacimiento_hasta)
+            qs = qs.order_by('-nota_venta__fecha_venta')[:limite]
+            for dv in qs:
+                a = dv.animal
+                nv = dv.nota_venta
+                cliente_str = None
+                if nv.cliente:
+                    cliente_str = f"{nv.cliente.nombre} {nv.cliente.apellidos or ''}".strip()
+                items.append(AnimalExportItemType(
+                    nro_arete=a.nro_arete, nombre=a.nombre, sexo=a.sexo,
+                    raza_nombre=a.raza.nombre if a.raza else None,
+                    categoria_nombre=a.categoria.nombre if a.categoria else None,
+                    peso=a.peso, fecha_nacimiento=a.fecha_nacimiento,
+                    edad_meses=calcular_edad_meses(a.fecha_nacimiento),
+                    tipo_produccion=a.tipo_produccion, origen=a.origen, estado=a.estado,
+                    parcela_actual=None, fecha_ingreso=a.fecha_ingreso,
+                    padre_arete=a.padre.nro_arete if a.padre else None,
+                    madre_arete=a.madre.nro_arete if a.madre else None,
+                    observaciones=a.observaciones,
+                    fecha_venta=nv.fecha_venta, cliente_nombre=cliente_str,
+                    peso_venta=dv.peso_venta_kg, precio_unitario=dv.precio_unitario,
+                    sub_total=dv.sub_total, guia_salida=nv.guia_salida,
+                ))
+
+        elif tipo_reporte in ('MUERTOS', 'BAJAS'):
+            qs = MuerteBaja.objects.filter(finca_id=finca_id).select_related(
+                'animal', 'animal__raza', 'animal__categoria',
+                'animal__padre', 'animal__madre'
+            )
+            if tipo_reporte == 'MUERTOS':
+                qs = qs.filter(tipo='MUERTE')
+            if fecha_baja_desde:
+                qs = qs.filter(fecha_baja__gte=fecha_baja_desde)
+            if fecha_baja_hasta:
+                qs = qs.filter(fecha_baja__lte=fecha_baja_hasta)
+            if sexo and sexo not in ('', 'TODOS'):
+                qs = qs.filter(animal__sexo=sexo)
+            if raza_id:
+                qs = qs.filter(animal__raza_id=raza_id)
+            if categoria_id:
+                qs = qs.filter(animal__categoria_id=categoria_id)
+            if tipo_produccion and tipo_produccion not in ('', 'TODOS'):
+                qs = qs.filter(animal__tipo_produccion=tipo_produccion)
+            if origen and origen not in ('', 'TODOS'):
+                qs = qs.filter(animal__origen=origen)
+            if fecha_nacimiento_desde:
+                qs = qs.filter(animal__fecha_nacimiento__gte=fecha_nacimiento_desde)
+            if fecha_nacimiento_hasta:
+                qs = qs.filter(animal__fecha_nacimiento__lte=fecha_nacimiento_hasta)
+            qs = qs.order_by('-fecha_baja')[:limite]
+            for mb in qs:
+                a = mb.animal
+                items.append(AnimalExportItemType(
+                    nro_arete=a.nro_arete, nombre=a.nombre, sexo=a.sexo,
+                    raza_nombre=a.raza.nombre if a.raza else None,
+                    categoria_nombre=a.categoria.nombre if a.categoria else None,
+                    peso=a.peso, fecha_nacimiento=a.fecha_nacimiento,
+                    edad_meses=calcular_edad_meses(a.fecha_nacimiento),
+                    tipo_produccion=a.tipo_produccion, origen=a.origen, estado=a.estado,
+                    parcela_actual=None, fecha_ingreso=a.fecha_ingreso,
+                    padre_arete=a.padre.nro_arete if a.padre else None,
+                    madre_arete=a.madre.nro_arete if a.madre else None,
+                    observaciones=a.observaciones,
+                    fecha_baja=mb.fecha_baja, tipo_baja=mb.tipo, causa_baja=mb.causa,
+                    peso_estimado_baja=mb.peso_estimado_kg, descripcion_baja=mb.descripcion,
+                ))
+
+        else:
+            qs = Animal.objects.filter(finca_id=finca_id).select_related(
+                'raza', 'categoria', 'padre', 'madre'
+            ).prefetch_related('historial_parcelas__parcela')
+
+            if tipo_reporte == 'ACTIVOS':
+                qs = qs.filter(estado='ACTIVO')
+            elif estado and estado not in ('', 'TODOS'):
+                qs = qs.filter(estado=estado)
+
+            qs = _filtrar_animal_qs(qs)
+
+            if parcela_id:
+                qs = qs.filter(
+                    historial_parcelas__parcela_id=parcela_id,
+                    historial_parcelas__fecha_salida__isnull=True
+                ).distinct()
+
+            if orden == 'arete_az':
+                qs = qs.order_by('nro_arete')
+            elif orden == 'nombre_az':
+                qs = qs.order_by('nombre')
+            elif orden == 'mayor_peso':
+                qs = qs.order_by('-peso')
+            elif orden == 'menor_peso':
+                qs = qs.order_by('peso')
+            else:
+                qs = qs.order_by('-fecha_registro')
+
+            qs = qs[:limite]
+
+            for a in qs:
+                parcela_act = None
+                for hp in a.historial_parcelas.all():
+                    if hp.fecha_salida is None and hp.parcela:
+                        parcela_act = hp.parcela.nombre
+                        break
+                items.append(AnimalExportItemType(
+                    nro_arete=a.nro_arete, nombre=a.nombre, sexo=a.sexo,
+                    raza_nombre=a.raza.nombre if a.raza else None,
+                    categoria_nombre=a.categoria.nombre if a.categoria else None,
+                    peso=a.peso, fecha_nacimiento=a.fecha_nacimiento,
+                    edad_meses=calcular_edad_meses(a.fecha_nacimiento),
+                    tipo_produccion=a.tipo_produccion, origen=a.origen, estado=a.estado,
+                    parcela_actual=parcela_act, fecha_ingreso=a.fecha_ingreso,
+                    padre_arete=a.padre.nro_arete if a.padre else None,
+                    madre_arete=a.madre.nro_arete if a.madre else None,
+                    observaciones=a.observaciones,
+                ))
+
+        if not items:
+            return ExportarAnimalesResultType(
+                items=[], total=0,
+                mensaje="No existen datos para los filtros seleccionados."
+            )
+        return ExportarAnimalesResultType(
+            items=items, total=len(items),
+            mensaje=f"Se encontraron {len(items)} registros."
+        )
+
+
+# ==========================================
+# MUTATIONS
+# ==========================================
+
+class CrearRaza(graphene.Mutation):
+    class Arguments:
+        nombre = graphene.String(required=True)
+        orientacion = graphene.String()
+        origen = graphene.String()
+        descripcion = graphene.String()
+
+    raza = graphene.Field(RazaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, nombre, **kwargs):
+        try:
+            raza = Raza.objects.create(
+                nombre=nombre,
+                orientacion=kwargs.get('orientacion', 'DOBLE_PROPOSITO'),
+                origen=kwargs.get('origen', ''),
+                descripcion=kwargs.get('descripcion', '')
+            )
+            return CrearRaza(raza=raza, success=True, message="Raza creada")
+        except Exception as e:
+            return CrearRaza(raza=None, success=False, message=str(e))
+
+
+class ActualizarRaza(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        nombre = graphene.String()
+        orientacion = graphene.String()
+        origen = graphene.String()
+        activo = graphene.Boolean()
+
+    raza = graphene.Field(RazaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            raza = Raza.objects.get(id=id)
+            if kwargs.get('nombre'):
+                raza.nombre = kwargs['nombre']
+            if kwargs.get('orientacion'):
+                raza.orientacion = kwargs['orientacion']
+            if kwargs.get('origen'):
+                raza.origen = kwargs['origen']
+            if kwargs.get('activo') is not None:
+                raza.activo = kwargs['activo']
+            raza.save()
+            return ActualizarRaza(raza=raza, success=True, message="Raza actualizada")
+        except Exception as e:
+            return ActualizarRaza(raza=None, success=False, message=str(e))
+
+
+class EliminarRaza(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            raza = Raza.objects.get(id=id)
+            raza.delete()
+            return EliminarRaza(success=True, message="Raza eliminada")
+        except Exception as e:
+            return EliminarRaza(success=False, message=str(e))
+
+
+class CrearCategoriaAnimal(graphene.Mutation):
+    class Arguments:
+        nombre = graphene.String(required=True)
+        descripcion = graphene.String()
+
+    categoria = graphene.Field(CategoriaAnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, nombre, **kwargs):
+        try:
+            categoria = CategoriaAnimal.objects.create(
+                nombre=nombre,
+                descripcion=kwargs.get('descripcion', '')
+            )
+            return CrearCategoriaAnimal(categoria=categoria, success=True, message="CategorÃ­a creada")
+        except Exception as e:
+            return CrearCategoriaAnimal(categoria=None, success=False, message=str(e))
+
+
+class ActualizarCategoriaAnimal(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        nombre = graphene.String()
+        activo = graphene.Boolean()
+
+    categoria = graphene.Field(CategoriaAnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            categoria = CategoriaAnimal.objects.get(id=id)
+            if kwargs.get('nombre'):
+                categoria.nombre = kwargs['nombre']
+            if kwargs.get('activo') is not None:
+                categoria.activo = kwargs['activo']
+            categoria.save()
+            return ActualizarCategoriaAnimal(categoria=categoria, success=True, message="CategorÃ­a actualizada")
+        except Exception as e:
+            return ActualizarCategoriaAnimal(categoria=None, success=False, message=str(e))
+
+
+class EliminarCategoriaAnimal(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            categoria = CategoriaAnimal.objects.get(id=id)
+            categoria.delete()
+            return EliminarCategoriaAnimal(success=True, message="CategorÃ­a eliminada")
+        except Exception as e:
+            return EliminarCategoriaAnimal(success=False, message=str(e))
+
+
+class CrearAnimal(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        raza_id = graphene.ID()
+        categoria_id = graphene.ID()
+        padre_id = graphene.ID()
+        madre_id = graphene.ID()
+        nombre = graphene.String()
+        nro_arete = graphene.String(required=True)
+        sexo = graphene.String(required=True)
+        fecha_nacimiento = graphene.Date()
+        fecha_ingreso = graphene.Date()
+        edad_ingreso_meses = graphene.Int()
+        peso = graphene.Decimal()
+        peso_nacimiento = graphene.Decimal()
+        tipo_produccion = graphene.String()
+        origen = graphene.String()
+        color = graphene.String()
+        observaciones = graphene.String()
+
+    animal = graphene.Field(AnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, nro_arete, sexo, **kwargs):
+        try:
+            from fincas.models import Finca
+            finca = Finca.objects.get(id=finca_id)
+            animal = Animal.objects.create(
+                finca=finca,
+                nro_arete=nro_arete,
+                sexo=sexo,
+                raza_id=kwargs.get('raza_id'),
+                categoria_id=kwargs.get('categoria_id'),
+                padre_id=kwargs.get('padre_id'),
+                madre_id=kwargs.get('madre_id'),
+                nombre=kwargs.get('nombre'),
+                fecha_nacimiento=kwargs.get('fecha_nacimiento'),
+                fecha_ingreso=kwargs.get('fecha_ingreso'),
+                edad_ingreso_meses=kwargs.get('edad_ingreso_meses', 0),
+                peso=kwargs.get('peso', 0),
+                peso_nacimiento=kwargs.get('peso_nacimiento', 0),
+                tipo_produccion=kwargs.get('tipo_produccion', 'DOBLE_PROPOSITO'),
+                origen=kwargs.get('origen', 'NACIDO_FINCA'),
+                color=kwargs.get('color'),
+                observaciones=kwargs.get('observaciones')
+            )
+            return CrearAnimal(animal=animal, success=True, message="Animal creado")
+        except Exception as e:
+            return CrearAnimal(animal=None, success=False, message=str(e))
+
+
+class ActualizarAnimal(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        raza_id = graphene.ID()
+        categoria_id = graphene.ID()
+        padre_id = graphene.ID()
+        madre_id = graphene.ID()
+        nombre = graphene.String()
+        sexo = graphene.String()
+        fecha_nacimiento = graphene.Date()
+        fecha_ingreso = graphene.Date()
+        edad_ingreso_meses = graphene.Int()
+        peso = graphene.Decimal()
+        peso_nacimiento = graphene.Decimal()
+        estado = graphene.String()
+        tipo_produccion = graphene.String()
+        origen = graphene.String()
+        observaciones = graphene.String()
+
+    animal = graphene.Field(AnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            animal = Animal.objects.get(id=id)
+            if kwargs.get('raza_id'):
+                animal.raza_id = kwargs['raza_id']
+            if kwargs.get('categoria_id'):
+                animal.categoria_id = kwargs['categoria_id']
+            if 'padre_id' in kwargs:
+                animal.padre_id = kwargs['padre_id']
+            if 'madre_id' in kwargs:
+                animal.madre_id = kwargs['madre_id']
+            if kwargs.get('nombre') is not None:
+                animal.nombre = kwargs['nombre']
+            if kwargs.get('sexo'):
+                animal.sexo = kwargs['sexo']
+            if kwargs.get('fecha_nacimiento'):
+                animal.fecha_nacimiento = kwargs['fecha_nacimiento']
+            if kwargs.get('fecha_ingreso'):
+                animal.fecha_ingreso = kwargs['fecha_ingreso']
+            if kwargs.get('edad_ingreso_meses') is not None:
+                animal.edad_ingreso_meses = kwargs['edad_ingreso_meses']
+            if kwargs.get('peso'):
+                animal.peso = kwargs['peso']
+            if kwargs.get('peso_nacimiento') is not None:
+                animal.peso_nacimiento = kwargs['peso_nacimiento']
+            if kwargs.get('estado'):
+                animal.estado = kwargs['estado']
+            if kwargs.get('tipo_produccion'):
+                animal.tipo_produccion = kwargs['tipo_produccion']
+            if kwargs.get('origen'):
+                animal.origen = kwargs['origen']
+            if kwargs.get('observaciones') is not None:
+                animal.observaciones = kwargs['observaciones']
+            animal.save()
+            return ActualizarAnimal(animal=animal, success=True, message="Animal actualizado")
+        except Exception as e:
+            return ActualizarAnimal(animal=None, success=False, message=str(e))
+
+
+class EliminarAnimal(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            animal = Animal.objects.get(id=id)
+            animal.delete()
+            return EliminarAnimal(success=True, message="Animal eliminado")
+        except Exception as e:
+            return EliminarAnimal(success=False, message=str(e))
+
+
+class CrearParcela(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        nombre = graphene.String(required=True)
+        tamano = graphene.Decimal()
+        capacidad_maxima = graphene.Int()
+        tipo_pastura = graphene.String()
+        estado = graphene.String()
+
+    parcela = graphene.Field(ParcelaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, nombre, **kwargs):
+        try:
+            from fincas.models import Finca
+            finca = Finca.objects.get(id=finca_id)
+            parcela = Parcela.objects.create(
+                finca=finca,
+                nombre=nombre,
+                tamano=kwargs.get('tamano', 0),
+                capacidad_maxima=kwargs.get('capacidad_maxima', 0),
+                tipo_pastura=kwargs.get('tipo_pastura', ''),
+                estado=kwargs.get('estado', 'ACTIVA')
+            )
+            return CrearParcela(parcela=parcela, success=True, message="Parcela creada exitosamente")
+        except Exception as e:
+            return CrearParcela(parcela=None, success=False, message=str(e))
+
+
+class ActualizarParcela(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        nombre = graphene.String()
+        tamano = graphene.Decimal()
+        capacidad_maxima = graphene.Int()
+        tipo_pastura = graphene.String()
+        estado = graphene.String()
+
+    parcela = graphene.Field(ParcelaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            parcela = Parcela.objects.get(id=id)
+            if kwargs.get('nombre'):
+                parcela.nombre = kwargs['nombre']
+            if kwargs.get('tamano'):
+                parcela.tamano = kwargs['tamano']
+            if kwargs.get('capacidad_maxima'):
+                parcela.capacidad_maxima = kwargs['capacidad_maxima']
+            if kwargs.get('tipo_pastura'):
+                parcela.tipo_pastura = kwargs['tipo_pastura']
+            if kwargs.get('estado'):
+                parcela.estado = kwargs['estado']
+            parcela.save()
+            return ActualizarParcela(parcela=parcela, success=True, message="Parcela actualizada")
+        except Exception as e:
+            return ActualizarParcela(parcela=None, success=False, message=str(e))
+
+
+class EliminarParcela(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            parcela = Parcela.objects.get(id=id)
+            parcela.delete()
+            return EliminarParcela(success=True, message="Parcela eliminada")
+        except Exception as e:
+            return EliminarParcela(success=False, message=str(e))
+
+
+class MoverAnimalAParcela(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        animal_id = graphene.ID(required=True)
+        parcela_id = graphene.ID(required=True)
+        fecha_ingreso = graphene.Date(required=True)
+        observaciones = graphene.String()
+
+    movimiento = graphene.Field(AnimalParcelaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, animal_id, parcela_id, fecha_ingreso, **kwargs):
+        try:
+            from fincas.models import Finca
+            finca = Finca.objects.get(id=finca_id)
+            animal = Animal.objects.get(id=animal_id, finca=finca)
+            parcela = Parcela.objects.get(id=parcela_id, finca=finca)
+
+            if animal.estado != 'ACTIVO':
+                return MoverAnimalAParcela(movimiento=None, success=False,
+                    message="Solo se pueden mover animales con estado ACTIVO")
+
+            if parcela.estado == 'DESCANSO':
+                return MoverAnimalAParcela(movimiento=None, success=False,
+                    message="La parcela destino estÃ¡ en descanso y no puede recibir animales")
+
+            ocupacion_actual = AnimalParcela.objects.filter(
+                parcela=parcela, fecha_salida__isnull=True
+            ).count()
+            if parcela.capacidad_maxima > 0 and ocupacion_actual >= parcela.capacidad_maxima:
+                return MoverAnimalAParcela(movimiento=None, success=False,
+                    message=f"La parcela destino estÃ¡ llena ({ocupacion_actual}/{parcela.capacidad_maxima})")
+
+            movimiento_actual = AnimalParcela.objects.filter(
+                animal=animal, fecha_salida__isnull=True
+            ).select_related('parcela').first()
+            parcela_origen = movimiento_actual.parcela if movimiento_actual else None
+
+            AnimalParcela.objects.filter(
+                animal=animal, fecha_salida__isnull=True
+            ).update(fecha_salida=fecha_ingreso)
+
+            movimiento = AnimalParcela.objects.create(
+                animal=animal,
+                parcela=parcela,
+                fecha_ingreso=fecha_ingreso,
+            )
+
+            parcela.estado = 'OCUPADO'
+            parcela.save(update_fields=['estado'])
+
+            if parcela_origen and parcela_origen.id != parcela.id:
+                animales_restantes = AnimalParcela.objects.filter(
+                    parcela=parcela_origen, fecha_salida__isnull=True
+                ).count()
+                if parcela_origen.estado != 'DESCANSO':
+                    parcela_origen.estado = 'LIBRE' if animales_restantes == 0 else 'OCUPADO'
+                    parcela_origen.save(update_fields=['estado'])
+
+            # Registrar en historial de movimientos
+            user = info.context.user
+            MovimientoAnimal.objects.create(
+                finca=finca,
+                animal=animal,
+                parcela_origen=parcela_origen,
+                parcela_destino=parcela,
+                fecha_movimiento=fecha_ingreso,
+                motivo='ROTACION',
+                registrado_por=user if user.is_authenticated else None,
+            )
+
+            return MoverAnimalAParcela(movimiento=movimiento, success=True, message="Animal movido exitosamente")
+        except Animal.DoesNotExist:
+            return MoverAnimalAParcela(movimiento=None, success=False,
+                message="Animal no encontrado o no pertenece a esta finca")
+        except Parcela.DoesNotExist:
+            return MoverAnimalAParcela(movimiento=None, success=False,
+                message="Parcela no encontrada o no pertenece a esta finca")
+        except Exception as e:
+            return MoverAnimalAParcela(movimiento=None, success=False, message=str(e))
+
+
+class CrearMovimientoAnimal(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        animal_id = graphene.ID(required=True)
+        fecha_movimiento = graphene.Date(required=True)
+        parcela_origen_id = graphene.ID()
+        parcela_destino_id = graphene.ID()
+        motivo = graphene.String()
+        observaciones = graphene.String()
+
+    movimiento = graphene.Field(MovimientoAnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, animal_id, fecha_movimiento, **kwargs):
+        try:
+            from fincas.models import Finca
+            finca = Finca.objects.get(id=finca_id)
+            animal = Animal.objects.get(id=animal_id, finca=finca)
+            user = info.context.user
+            movimiento = MovimientoAnimal.objects.create(
+                finca=finca,
+                animal=animal,
+                fecha_movimiento=fecha_movimiento,
+                parcela_origen_id=kwargs.get('parcela_origen_id'),
+                parcela_destino_id=kwargs.get('parcela_destino_id'),
+                motivo=kwargs.get('motivo'),
+                observaciones=kwargs.get('observaciones'),
+                registrado_por=user if user.is_authenticated else None,
+            )
+            return CrearMovimientoAnimal(movimiento=movimiento, success=True, message="Movimiento registrado")
+        except Exception as e:
+            return CrearMovimientoAnimal(movimiento=None, success=False, message=str(e))
+
+
+class ActualizarMovimientoAnimal(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        fecha_movimiento = graphene.Date()
+        parcela_origen_id = graphene.ID()
+        parcela_destino_id = graphene.ID()
+        motivo = graphene.String()
+        observaciones = graphene.String()
+
+    movimiento = graphene.Field(MovimientoAnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            movimiento = MovimientoAnimal.objects.get(id=id)
+            if kwargs.get('fecha_movimiento'):
+                movimiento.fecha_movimiento = kwargs['fecha_movimiento']
+            if 'parcela_origen_id' in kwargs:
+                movimiento.parcela_origen_id = kwargs['parcela_origen_id']
+            if 'parcela_destino_id' in kwargs:
+                movimiento.parcela_destino_id = kwargs['parcela_destino_id']
+            if 'motivo' in kwargs:
+                movimiento.motivo = kwargs['motivo']
+            if 'observaciones' in kwargs:
+                movimiento.observaciones = kwargs['observaciones']
+            movimiento.save()
+            return ActualizarMovimientoAnimal(movimiento=movimiento, success=True, message="Movimiento actualizado")
+        except Exception as e:
+            return ActualizarMovimientoAnimal(movimiento=None, success=False, message=str(e))
+
+
+class EliminarMovimientoAnimal(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            MovimientoAnimal.objects.get(id=id).delete()
+            return EliminarMovimientoAnimal(success=True, message="Movimiento eliminado")
+        except Exception as e:
+            return EliminarMovimientoAnimal(success=False, message=str(e))
+
+
+class SacarAnimalDeParcela(graphene.Mutation):
+    class Arguments:
+        movimiento_id = graphene.ID(required=True)
+        fecha_salida = graphene.Date(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, movimiento_id, fecha_salida):
+        try:
+            movimiento = AnimalParcela.objects.get(id=movimiento_id)
+            movimiento.fecha_salida = fecha_salida
+            movimiento.save()
+            return SacarAnimalDeParcela(success=True, message="Animal retirado de la parcela")
+        except Exception as e:
+            return SacarAnimalDeParcela(success=False, message=str(e))
+
+
+# ==========================================
+# MUTATION PRINCIPAL
+# ==========================================
+
+class Mutation(graphene.ObjectType):
+    crear_raza = CrearRaza.Field()
+    actualizar_raza = ActualizarRaza.Field()
+    eliminar_raza = EliminarRaza.Field()
+
+    crear_categoria_animal = CrearCategoriaAnimal.Field()
+    actualizar_categoria_animal = ActualizarCategoriaAnimal.Field()
+    eliminar_categoria_animal = EliminarCategoriaAnimal.Field()
+
+    crear_animal = CrearAnimal.Field()
+    actualizar_animal = ActualizarAnimal.Field()
+    eliminar_animal = EliminarAnimal.Field()
+
+    crear_parcela = CrearParcela.Field()
+    actualizar_parcela = ActualizarParcela.Field()
+    eliminar_parcela = EliminarParcela.Field()
+
+    mover_animal_a_parcela = MoverAnimalAParcela.Field()
+    sacar_animal_de_parcela = SacarAnimalDeParcela.Field()
+
+    crear_movimiento_animal = CrearMovimientoAnimal.Field()
+    actualizar_movimiento_animal = ActualizarMovimientoAnimal.Field()
+    eliminar_movimiento_animal = EliminarMovimientoAnimal.Field()
+from django.shortcuts import render
+
+# Create your views here.
+from datetime import timedelta
+
+from django.conf import settings
+from django.db import models
+
+from fincas.models import Finca
+from animales.models import Animal
+from catalogos.models import Reproductor, Veterinario
+
+
+class EventoReproductivo(models.Model):
+    RESULTADO_SERVICIO_CHOICES = [
+        ("PENDIENTE", "Pendiente"),
+        ("PRENADA", "PreÃ±ada"),
+        ("VACIA", "VacÃ­a"),
+        ("REPETIR", "Repetir servicio"),
+    ]
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="%(class)s_eventos_reproductivos"
+    )
+
+    hembra = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="%(class)s_eventos_reproductivos"
+    )
+
+    fecha = models.DateField()
+    numero_servicio = models.IntegerField(default=1)
+    fecha_probable_parto = models.DateField(blank=True, null=True)
+
+    resultado = models.CharField(
+        max_length=30,
+        choices=RESULTADO_SERVICIO_CHOICES,
+        default="PENDIENTE"
+    )
+
+    observaciones = models.TextField(blank=True, null=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="%(class)s_eventos_reproductivos_registrados"
+    )
+
+    class Meta:
+        abstract = True
+
+    def calcular_fecha_probable_parto(self):
+        if self.fecha:
+            return self.fecha + timedelta(days=283)
+        return None
+
+
+class InseminacionArtificial(EventoReproductivo):
+    reproductor = models.ForeignKey(
+        Reproductor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inseminaciones_artificiales"
+    )
+
+    numero_pajuela = models.CharField(max_length=100, blank=True, null=True)
+    lote_nitrogeno = models.CharField(max_length=100, blank=True, null=True)
+    tecnico_inseminador = models.CharField(max_length=150, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.fecha_probable_parto:
+            self.fecha_probable_parto = self.calcular_fecha_probable_parto()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"IA - {self.hembra} - {self.fecha}"
+
+
+class MontaNatural(EventoReproductivo):
+    reproductor = models.ForeignKey(
+        Reproductor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="montas_naturales_reproduccion"
+    )
+
+    duracion_dias = models.IntegerField(default=1)
+
+    def save(self, *args, **kwargs):
+        if not self.fecha_probable_parto:
+            self.fecha_probable_parto = self.calcular_fecha_probable_parto()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Monta natural - {self.hembra} - {self.fecha}"
+
+
+class DiagnosticoPrenez(EventoReproductivo):
+    RESULTADO_PRENEZ_CHOICES = [
+        ("POSITIVO", "Positivo"),
+        ("NEGATIVO", "Negativo"),
+        ("DUDOSO", "Dudoso"),
+    ]
+
+    resultado_prenez = models.CharField(
+        max_length=30,
+        choices=RESULTADO_PRENEZ_CHOICES,
+        default="DUDOSO"
+    )
+
+    dias_gestacion = models.IntegerField(default=0)
+    metodo = models.CharField(max_length=100, blank=True, null=True)
+
+    veterinario = models.ForeignKey(
+        Veterinario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="diagnosticos_prenez_reproduccion"
+    )
+
+    fecha_confirmacion = models.DateField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if self.fecha and self.dias_gestacion > 0:
+            dias_restantes = 283 - self.dias_gestacion
+            self.fecha_probable_parto = self.fecha + timedelta(days=dias_restantes)
+        elif not self.fecha_probable_parto:
+            self.fecha_probable_parto = self.calcular_fecha_probable_parto()
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"DiagnÃ³stico preÃ±ez - {self.hembra} - {self.resultado_prenez}"
+
+
+class Reproduccion(models.Model):
+    TIPO_PARTO_CHOICES = [
+        ("NORMAL", "Normal"),
+        ("DISTOCICO", "DistÃ³cico"),
+        ("ABORTO", "Aborto"),
+        ("MULTIPLE", "MÃºltiple"),
+    ]
+
+    ESTADO_REPRODUCCION_CHOICES = [
+        ("SERVIDA", "Servida"),
+        ("PRENADA", "PreÃ±ada"),
+        ("PARIDA", "Parida"),
+        ("ABORTO", "Aborto"),
+        ("VACIA", "VacÃ­a"),
+    ]
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="reproducciones"
+    )
+
+    madre = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="reproducciones_como_madre"
+    )
+
+    padre = models.ForeignKey(
+        Animal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reproducciones_como_padre"
+    )
+
+    inseminacion = models.ForeignKey(
+        InseminacionArtificial,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reproducciones_originadas"
+    )
+
+    monta = models.ForeignKey(
+        MontaNatural,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reproducciones_originadas"
+    )
+
+    fecha_servicio = models.DateField(blank=True, null=True)
+    fecha_parto_esperado = models.DateField(blank=True, null=True)
+    fecha_parto_real = models.DateField(blank=True, null=True)
+
+    tipo_parto = models.CharField(
+        max_length=30,
+        choices=TIPO_PARTO_CHOICES,
+        default="NORMAL"
+    )
+
+    num_crias = models.IntegerField(default=1)
+
+    crias = models.ManyToManyField(
+        Animal,
+        blank=True,
+        related_name="reproducciones_como_cria"
+    )
+
+    estado = models.CharField(
+        max_length=30,
+        choices=ESTADO_REPRODUCCION_CHOICES,
+        default="SERVIDA"
+    )
+
+    peso_total_crias = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    observaciones = models.TextField(blank=True, null=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reproducciones_registradas"
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.fecha_parto_esperado and self.fecha_servicio:
+            self.fecha_parto_esperado = self.fecha_servicio + timedelta(days=283)
+
+        if self.fecha_parto_real:
+            self.estado = "PARIDA"
+
+        super().save(*args, **kwargs)
+
+    def get_dias_desviacion_parto(self):
+        if self.fecha_parto_real and self.fecha_parto_esperado:
+            return (self.fecha_parto_real - self.fecha_parto_esperado).days
+        return None
+
+    def __str__(self):
+        return f"Parto/ReproducciÃ³n - {self.madre} - {self.estado}"
+
+
+# ==========================================
+# NUEVOS MODELOS PARA REPRODUCCIÃ“N
+# ==========================================
+
+class Celo(models.Model):
+    """Registro de celo en hembras"""
+    TIPO_CELO = [
+        ('NATURAL', 'Celo Natural'),
+        ('INDUCIDO', 'Celo Inducido'),
+        ('SINCRONIZADO', 'Celo Sincronizado'),
+    ]
+    
+    INTENSIDAD = [
+        ('BAJA', 'Baja'),
+        ('MEDIA', 'Media'),
+        ('ALTA', 'Alta'),
+    ]
+    
+    finca = models.ForeignKey(Finca, on_delete=models.CASCADE, related_name='celos')
+    hembra = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='celos')
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField(null=True, blank=True)
+    tipo = models.CharField(max_length=20, choices=TIPO_CELO, default='NATURAL')
+    intensidad = models.CharField(max_length=20, choices=INTENSIDAD, default='MEDIA')
+    detectado_por = models.CharField(max_length=150, blank=True)
+    observaciones = models.TextField(blank=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Celo - {self.hembra} - {self.fecha_inicio}"
+    
+    @property
+    def duracion_horas(self):
+        if self.fecha_inicio and self.fecha_fin:
+            delta = self.fecha_fin - self.fecha_inicio
+            return delta.days * 24
+        return None
+
+
+class Palpacion(models.Model):
+    """Registro de palpaciÃ³n rectal para diagnÃ³stico de preÃ±ez"""
+    RESULTADO = [
+        ('POSITIVO', 'Positivo (PreÃ±ada)'),
+        ('NEGATIVO', 'Negativo (VacÃ­a)'),
+        ('SOSPECHOSO', 'Sospechoso'),
+        ('QUISTE', 'Quiste'),
+    ]
+    
+    finca = models.ForeignKey(Finca, on_delete=models.CASCADE, related_name='palpaciones')
+    hembra = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='palpaciones')
+    fecha = models.DateField()
+    resultado = models.CharField(max_length=20, choices=RESULTADO)
+    dias_gestacion_estimados = models.PositiveIntegerField(null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    veterinario = models.ForeignKey(Veterinario, on_delete=models.SET_NULL, null=True, blank=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        # Si es positiva y hay dÃ­as de gestaciÃ³n, crear/actualizar diagnÃ³stico
+        if self.resultado == 'POSITIVO' and self.dias_gestacion_estimados:
+            from datetime import timedelta
+            fecha_probable_parto = self.fecha + timedelta(days=283 - self.dias_gestacion_estimados)
+            DiagnosticoPrenez.objects.update_or_create(
+                finca=self.finca,
+                hembra=self.hembra,
+                fecha=self.fecha,
+                defaults={
+                    'resultado_prenez': 'POSITIVO',
+                    'dias_gestacion': self.dias_gestacion_estimados,
+                    'fecha_probable_parto': fecha_probable_parto,
+                    'veterinario': self.veterinario,
+                    'observaciones': self.observaciones
+                }
+            )
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"PalpaciÃ³n - {self.hembra} - {self.fecha} - {self.resultado}"
+
+
+class HembraRepetidora(models.Model):
+    """Registro de hembras con problemas de fertilidad"""
+    animal = models.OneToOneField(Animal, on_delete=models.CASCADE, related_name='repetidora')
+    numero_servicios = models.PositiveIntegerField(default=0, help_text="NÃºmero de servicios sin preÃ±ez")
+    fecha_ultimo_servicio = models.DateField(null=True, blank=True)
+    servicios_fallidos = models.JSONField(default=list, blank=True, help_text="Lista de fechas de servicios fallidos")
+    evaluada_veterinario = models.BooleanField(default=False)
+    causa_presunta = models.TextField(blank=True)
+    descartada = models.BooleanField(default=False)
+    fecha_descarte = models.DateField(null=True, blank=True)
+    motivo_descarte = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Hembra Repetidora - {self.animal} - {self.numero_servicios} servicios"
+    
+    def registrar_servicio_fallido(self, fecha):
+        if self.servicios_fallidos:
+            self.servicios_fallidos.append(str(fecha))
+        else:
+            self.servicios_fallidos = [str(fecha)]
+        self.numero_servicios = len(self.servicios_fallidos)
+        self.fecha_ultimo_servicio = fecha
+        self.save()
+
+
+class AbortoDetallado(models.Model):
+    """Registro detallado de abortos"""
+    CAUSA_ABORTO = [
+        ('INFECCIOSO', 'Infeccioso (Brucelosis, Leptospira, etc.)'),
+        ('TOXICO', 'TÃ³xico (Plantas, Micotoxinas)'),
+        ('NUTRICIONAL', 'Nutricional (Deficiencias)'),
+        ('TRAUMATICO', 'TraumÃ¡tico'),
+        ('GENETICO', 'GenÃ©tico'),
+        ('HORMONAL', 'Hormonal'),
+        ('ESTRES', 'EstrÃ©s'),
+        ('DESCONOCIDO', 'Desconocido'),
+    ]
+    
+    ESTADO_FETO = [
+        ('MUMMIFIED', 'Momificado'),
+        ('MACERADO', 'Macerado'),
+        ('FRESCO', 'Fresco'),
+        ('AUTOLIZADO', 'Autolizado'),
+    ]
+    
+    reproduccion = models.OneToOneField(Reproduccion, on_delete=models.CASCADE, related_name='aborto_detalle')
+    causa = models.CharField(max_length=20, choices=CAUSA_ABORTO)
+    descripcion = models.TextField()
+    estado_feto = models.CharField(max_length=20, choices=ESTADO_FETO, null=True, blank=True)
+    semanas_gestacion = models.PositiveIntegerField(help_text="Semanas de gestaciÃ³n al abortar")
+    tratamiento_aplicado = models.TextField(blank=True)
+    medidas_preventivas = models.TextField(blank=True)
+    costo_asociado = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Aborto - {self.reproduccion.madre} - {self.semanas_gestacion} semanas"
+
+
+class Destete(models.Model):
+    """Registro de destete de crÃ­as"""
+    TIPO_DESTETE = [
+        ('NATURAL', 'Natural'),
+        ('PRECOZ', 'Precoz'),
+        ('FORZADO', 'Forzado'),
+    ]
+    
+    finca = models.ForeignKey(Finca, on_delete=models.CASCADE, related_name='destetes')
+    madre = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='destetes_como_madre')
+    cria = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='destete_recibido')
+    fecha_destete = models.DateField()
+    tipo = models.CharField(max_length=20, choices=TIPO_DESTETE, default='NATURAL')
+    edad_destete_dias = models.PositiveIntegerField(help_text="Edad de la crÃ­a en dÃ­as")
+    peso_cria = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Peso al destete (kg)")
+    estado_cria = models.CharField(max_length=50, blank=True, help_text="Buena, Regular, Mala")
+    observaciones = models.TextField(blank=True)
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Destete - {self.cria} - {self.fecha_destete}"
+# backend/reproduccion/schema.py
+from datetime import date, timedelta
+import graphene
+from graphene_django import DjangoObjectType
+from graphql_jwt.decorators import login_required
+
+from .models import (
+    InseminacionArtificial,
+    MontaNatural,
+    DiagnosticoPrenez,
+    Reproduccion,
+    Celo,
+    Palpacion,
+    HembraRepetidora,
+    AbortoDetallado,
+    Destete,
+)
+from fincas.models import Finca
+from animales.models import Animal
+from catalogos.models import Reproductor, Veterinario, Raza, CategoriaAnimal
+from accounts.permissions import scope_ids
+
+
+# ==========================================
+# TYPES EXISTENTES
+# ==========================================
+
+class InseminacionArtificialType(DjangoObjectType):
+    class Meta:
+        model = InseminacionArtificial
+        fields = "__all__"
+
+
+class MontaNaturalType(DjangoObjectType):
+    class Meta:
+        model = MontaNatural
+        fields = "__all__"
+
+
+class DiagnosticoPrenezType(DjangoObjectType):
+    class Meta:
+        model = DiagnosticoPrenez
+        fields = "__all__"
+
+
+class ReproduccionType(DjangoObjectType):
+    class Meta:
+        model = Reproduccion
+        fields = "__all__"
+        # Exponer los CharField con choices como String, no como Enum: hay
+        # datos histÃ³ricos con valores fuera de las choices (ej. tipo_parto=""
+        # en preÃ±adas) que, como Enum no-nullable, anulaban el item completo
+        # de la lista y rompÃ­an el frontend ("Cannot read ... of null").
+        convert_choices_to_enum = False
+
+
+# ==========================================
+# NUEVOS TYPES
+# ==========================================
+
+class CeloType(DjangoObjectType):
+    duracion_horas = graphene.Int()
+    
+    class Meta:
+        model = Celo
+        fields = "__all__"
+    
+    def resolve_duracion_horas(self, info):
+        return self.duracion_horas
+
+
+class PalpacionType(DjangoObjectType):
+    class Meta:
+        model = Palpacion
+        fields = "__all__"
+
+
+class HembraRepetidoraType(DjangoObjectType):
+    class Meta:
+        model = HembraRepetidora
+        fields = "__all__"
+
+
+class AbortoDetalladoType(DjangoObjectType):
+    class Meta:
+        model = AbortoDetallado
+        fields = "__all__"
+
+
+class DesteteType(DjangoObjectType):
+    class Meta:
+        model = Destete
+        fields = "__all__"
+
+
+# ==========================================
+# INPUT TYPES
+# ==========================================
+
+class CriaInput(graphene.InputObjectType):
+    nro_arete = graphene.String(required=True)
+    nombre = graphene.String()
+    sexo = graphene.String(required=True)
+    raza_id = graphene.ID()
+    categoria_id = graphene.ID()
+    peso_nacimiento = graphene.Float()
+    color = graphene.String()
+    observaciones = graphene.String()
+
+
+# ==========================================
+# QUERY
+# ==========================================
+
+class Query(graphene.ObjectType):
+    # Queries existentes
+    inseminaciones = graphene.List(InseminacionArtificialType, finca_id=graphene.ID())
+    montas_naturales = graphene.List(MontaNaturalType, finca_id=graphene.ID())
+    diagnosticos_prenez = graphene.List(DiagnosticoPrenezType, finca_id=graphene.ID())
+    reproducciones = graphene.List(ReproduccionType, finca_id=graphene.ID())
+    vacas_prenadas = graphene.List(ReproduccionType, finca_id=graphene.ID())
+    proximos_partos = graphene.List(ReproduccionType, dias=graphene.Int(default_value=30), finca_id=graphene.ID())
+    
+    # Nuevas queries
+    celos = graphene.List(CeloType, finca_id=graphene.ID(), hembra_id=graphene.ID())
+    palpaciones = graphene.List(PalpacionType, finca_id=graphene.ID())
+    hembras_repetidoras = graphene.List(HembraRepetidoraType, finca_id=graphene.ID())
+    abortos_detallados = graphene.List(AbortoDetalladoType, finca_id=graphene.ID())
+    destetes = graphene.List(DesteteType, finca_id=graphene.ID())
+    dias_abiertos = graphene.Float(hembra_id=graphene.ID())
+    
+    # Resolvers existentes
+    def resolve_inseminaciones(self, info, finca_id=None):
+        qs = InseminacionArtificial.objects.select_related('hembra', 'reproductor', 'finca')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs.order_by('-fecha')
+    
+    def resolve_montas_naturales(self, info, finca_id=None):
+        qs = MontaNatural.objects.select_related('hembra', 'reproductor', 'finca')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs.order_by('-fecha')
+    
+    def resolve_diagnosticos_prenez(self, info, finca_id=None):
+        qs = DiagnosticoPrenez.objects.select_related('hembra', 'veterinario', 'finca')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs.order_by('-fecha')
+    
+    def resolve_reproducciones(self, info, finca_id=None):
+        qs = Reproduccion.objects.select_related(
+            'madre', 'padre', 'inseminacion', 'monta',
+            'inseminacion__reproductor', 'monta__reproductor'
+        ).prefetch_related('crias')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs.order_by('-fecha_parto_real', '-fecha_registro')
+    
+    def resolve_vacas_prenadas(self, info, finca_id=None):
+        qs = Reproduccion.objects.filter(estado="PRENADA").select_related('madre')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs
+    
+    def resolve_proximos_partos(self, info, dias=30, finca_id=None):
+        hoy = date.today()
+        limite = hoy + timedelta(days=dias)
+        qs = Reproduccion.objects.filter(
+            fecha_parto_esperado__gte=hoy,
+            fecha_parto_esperado__lte=limite,
+            estado="PRENADA"
+        ).select_related('madre')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs
+    
+    # Nuevos resolvers
+    def resolve_celos(self, info, finca_id=None, hembra_id=None):
+        qs = Celo.objects.select_related('hembra', 'finca')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        if hembra_id:
+            qs = qs.filter(hembra_id=hembra_id)
+        return qs.order_by('-fecha_inicio')
+    
+    def resolve_palpaciones(self, info, finca_id=None):
+        qs = Palpacion.objects.select_related('hembra', 'veterinario', 'finca')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs.order_by('-fecha')
+    
+    def resolve_hembras_repetidoras(self, info, finca_id=None):
+        qs = HembraRepetidora.objects.select_related('animal').filter(
+            animal__finca_id__in=scope_ids(info.context.user, finca_id)
+        )
+        return qs.filter(descartada=False).order_by('-numero_servicios')
+    
+    def resolve_abortos_detallados(self, info, finca_id=None):
+        qs = AbortoDetallado.objects.select_related('reproduccion__madre').filter(
+            reproduccion__finca_id__in=scope_ids(info.context.user, finca_id)
+        )
+        return qs.order_by('-created_at')
+    
+    def resolve_destetes(self, info, finca_id=None):
+        qs = Destete.objects.select_related('madre', 'cria', 'finca')
+        qs = qs.filter(finca_id__in=scope_ids(info.context.user, finca_id))
+        return qs.order_by('-fecha_destete')
+    
+    def resolve_dias_abiertos(self, info, hembra_id):
+        """Calcula dÃ­as abiertos para una hembra (desde parto hasta prÃ³xima preÃ±ez)"""
+        try:
+            ultimo_parto = Reproduccion.objects.filter(
+                madre_id=hembra_id,
+                fecha_parto_real__isnull=False
+            ).order_by('-fecha_parto_real').first()
+            
+            if not ultimo_parto:
+                return None
+            
+            proxima_prenez = Reproduccion.objects.filter(
+                madre_id=hembra_id,
+                fecha_servicio__gt=ultimo_parto.fecha_parto_real,
+                estado='PRENADA'
+            ).order_by('fecha_servicio').first()
+            
+            if proxima_prenez:
+                return (proxima_prenez.fecha_servicio - ultimo_parto.fecha_parto_real).days
+            return None
+        except Exception:
+            return None
+
+
+# ==========================================
+# MUTATIONS EXISTENTES
+# ==========================================
+
+class CrearInseminacionArtificial(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        hembra_id = graphene.ID(required=True)
+        fecha = graphene.Date(required=True)
+        reproductor_id = graphene.ID()
+        numero_servicio = graphene.Int()
+        numero_pajuela = graphene.String()
+        lote_nitrogeno = graphene.String()
+        tecnico_inseminador = graphene.String()
+        observaciones = graphene.String()
+
+    inseminacion = graphene.Field(InseminacionArtificialType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, hembra_id, fecha, **kwargs):
+        try:
+            finca = Finca.objects.get(id=finca_id)
+            hembra = Animal.objects.get(id=hembra_id)
+
+            reproductor = None
+            if kwargs.get('reproductor_id'):
+                reproductor = Reproductor.objects.filter(id=kwargs['reproductor_id']).first()
+
+            inseminacion = InseminacionArtificial.objects.create(
+                finca=finca,
+                hembra=hembra,
+                reproductor=reproductor,
+                fecha=fecha,
+                numero_servicio=kwargs.get('numero_servicio', 1),
+                numero_pajuela=kwargs.get('numero_pajuela', ''),
+                lote_nitrogeno=kwargs.get('lote_nitrogeno', ''),
+                tecnico_inseminador=kwargs.get('tecnico_inseminador', ''),
+                observaciones=kwargs.get('observaciones', '')
+            )
+
+            return CrearInseminacionArtificial(
+                inseminacion=inseminacion,
+                success=True,
+                message="InseminaciÃ³n registrada exitosamente"
+            )
+        except Exception as e:
+            return CrearInseminacionArtificial(
+                inseminacion=None,
+                success=False,
+                message=str(e)
+            )
+
+
+class CrearDiagnosticoPrenez(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        hembra_id = graphene.ID(required=True)
+        fecha = graphene.Date(required=True)
+        resultado_prenez = graphene.String(required=True)
+        dias_gestacion = graphene.Int()
+        metodo = graphene.String()
+        veterinario_id = graphene.ID()
+        observaciones = graphene.String()
+
+    diagnostico = graphene.Field(DiagnosticoPrenezType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, hembra_id, fecha, resultado_prenez, **kwargs):
+        try:
+            finca = Finca.objects.get(id=finca_id)
+            hembra = Animal.objects.get(id=hembra_id)
+
+            veterinario = None
+            if kwargs.get('veterinario_id'):
+                veterinario = Veterinario.objects.filter(id=kwargs['veterinario_id']).first()
+
+            diagnostico = DiagnosticoPrenez.objects.create(
+                finca=finca,
+                hembra=hembra,
+                fecha=fecha,
+                resultado_prenez=resultado_prenez,
+                dias_gestacion=kwargs.get('dias_gestacion', 0),
+                metodo=kwargs.get('metodo', ''),
+                veterinario=veterinario,
+                observaciones=kwargs.get('observaciones', '')
+            )
+
+            return CrearDiagnosticoPrenez(
+                diagnostico=diagnostico,
+                success=True,
+                message=f"DiagnÃ³stico registrado: {resultado_prenez}"
+            )
+        except Exception as e:
+            return CrearDiagnosticoPrenez(
+                diagnostico=None,
+                success=False,
+                message=str(e)
+            )
+
+
+class CrearReproduccion(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        madre_id = graphene.ID(required=True)
+        fecha_parto_real = graphene.Date(required=True)
+        tipo_parto = graphene.String()
+        num_crias = graphene.Int()
+        peso_total_crias = graphene.Float()
+        observaciones = graphene.String()
+
+    reproduccion = graphene.Field(ReproduccionType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, madre_id, fecha_parto_real, **kwargs):
+        try:
+            finca = Finca.objects.get(id=finca_id)
+            madre = Animal.objects.get(id=madre_id)
+
+            reproduccion = Reproduccion.objects.create(
+                finca=finca,
+                madre=madre,
+                fecha_parto_real=fecha_parto_real,
+                tipo_parto=kwargs.get('tipo_parto', 'NORMAL'),
+                num_crias=kwargs.get('num_crias', 1),
+                peso_total_crias=kwargs.get('peso_total_crias', 0),
+                observaciones=kwargs.get('observaciones', ''),
+                estado="PARIDA"
+            )
+
+            return CrearReproduccion(
+                reproduccion=reproduccion,
+                success=True,
+                message="Parto registrado exitosamente"
+            )
+        except Exception as e:
+            return CrearReproduccion(
+                reproduccion=None,
+                success=False,
+                message=str(e)
+            )
+
+
+class RegistrarPartoConCrias(graphene.Mutation):
+    """
+    Mutation principal para registrar un parto completo con crÃ­as.
+    Crea la Reproduccion, crea cada crÃ­a como Animal, y opcionalmente inicia lactancia.
+    """
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        madre_id = graphene.ID(required=True)
+        inseminacion_id = graphene.ID()
+        monta_id = graphene.ID()
+        padre_id = graphene.ID()
+        fecha_parto_esperado = graphene.Date()
+        fecha_parto_real = graphene.Date(required=True)
+        tipo_parto = graphene.String()
+        num_crias = graphene.Int()
+        estado = graphene.String()
+        observaciones = graphene.String()
+        crear_lactancia = graphene.Boolean()
+        crias = graphene.List(CriaInput)
+
+    reproduccion = graphene.Field(ReproduccionType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, madre_id, fecha_parto_real, **kwargs):
+        try:
+            from produccion.models import Lactancia
+
+            finca = Finca.objects.get(id=finca_id)
+            madre = Animal.objects.get(id=madre_id, finca=finca)
+
+            if madre.sexo != 'HEMBRA':
+                return RegistrarPartoConCrias(
+                    reproduccion=None, success=False,
+                    message="La madre seleccionada debe ser una hembra"
+                )
+
+            tipo_parto = kwargs.get('tipo_parto', 'NORMAL')
+            num_crias = kwargs.get('num_crias', 0)
+
+            inseminacion = None
+            if kwargs.get('inseminacion_id'):
+                inseminacion = InseminacionArtificial.objects.filter(
+                    id=kwargs['inseminacion_id'], finca=finca
+                ).first()
+
+            monta = None
+            if kwargs.get('monta_id'):
+                monta = MontaNatural.objects.filter(
+                    id=kwargs['monta_id'], finca=finca
+                ).first()
+
+            padre = None
+            if kwargs.get('padre_id'):
+                padre = Animal.objects.filter(
+                    id=kwargs['padre_id'], finca=finca, sexo='MACHO'
+                ).first()
+
+            fecha_servicio = None
+            if inseminacion:
+                fecha_servicio = inseminacion.fecha
+            elif monta:
+                fecha_servicio = monta.fecha
+
+            fecha_parto_esperado = kwargs.get('fecha_parto_esperado')
+            if not fecha_parto_esperado:
+                if inseminacion and inseminacion.fecha_probable_parto:
+                    fecha_parto_esperado = inseminacion.fecha_probable_parto
+                elif monta and monta.fecha_probable_parto:
+                    fecha_parto_esperado = monta.fecha_probable_parto
+
+            reproduccion = Reproduccion.objects.create(
+                finca=finca,
+                madre=madre,
+                padre=padre,
+                inseminacion=inseminacion,
+                monta=monta,
+                fecha_servicio=fecha_servicio,
+                fecha_parto_esperado=fecha_parto_esperado,
+                fecha_parto_real=fecha_parto_real,
+                tipo_parto=tipo_parto,
+                num_crias=num_crias,
+                observaciones=kwargs.get('observaciones', ''),
+                registrado_por=info.context.user,
+            )
+
+            if tipo_parto == 'ABORTO':
+                Reproduccion.objects.filter(id=reproduccion.id).update(estado='ABORTO')
+                reproduccion.refresh_from_db()
+
+            if inseminacion:
+                resultado = 'PRENADA' if tipo_parto != 'ABORTO' else 'VACIA'
+                InseminacionArtificial.objects.filter(id=inseminacion.id).update(resultado=resultado)
+            if monta:
+                resultado = 'PRENADA' if tipo_parto != 'ABORTO' else 'VACIA'
+                MontaNatural.objects.filter(id=monta.id).update(resultado=resultado)
+
+            crias_input = kwargs.get('crias') or []
+            if tipo_parto != 'ABORTO' and crias_input:
+                for cria_data in crias_input:
+                    raza = None
+                    if cria_data.raza_id:
+                        raza = Raza.objects.filter(id=cria_data.raza_id).first()
+
+                    categoria = None
+                    if cria_data.categoria_id:
+                        categoria = CategoriaAnimal.objects.filter(id=cria_data.categoria_id).first()
+
+                    cria = Animal.objects.create(
+                        finca=finca,
+                        nro_arete=cria_data.nro_arete,
+                        nombre=cria_data.nombre or '',
+                        sexo=cria_data.sexo,
+                        raza=raza,
+                        categoria=categoria,
+                        madre=madre,
+                        padre=padre,
+                        origen='NACIDO_FINCA',
+                        fecha_nacimiento=fecha_parto_real,
+                        fecha_ingreso=fecha_parto_real,
+                        estado='ACTIVO',
+                        peso_nacimiento=cria_data.peso_nacimiento or 0,
+                        peso=cria_data.peso_nacimiento or 0,
+                        color=cria_data.color or '',
+                        observaciones=cria_data.observaciones or '',
+                    )
+                    reproduccion.crias.add(cria)
+
+            if kwargs.get('crear_lactancia') and tipo_parto != 'ABORTO':
+                try:
+                    last = Lactancia.objects.filter(vaca=madre).order_by('-numero_lactancia').first()
+                    numero = (last.numero_lactancia + 1) if last else 1
+                    Lactancia.objects.create(
+                        finca=finca,
+                        vaca=madre,
+                        reproduccion=reproduccion,
+                        numero_lactancia=numero,
+                        fecha_inicio=fecha_parto_real,
+                        estado='ACTIVA',
+                    )
+                except Exception:
+                    pass
+
+            reproduccion.refresh_from_db()
+
+            return RegistrarPartoConCrias(
+                reproduccion=reproduccion,
+                success=True,
+                message="Parto registrado exitosamente"
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return RegistrarPartoConCrias(
+                reproduccion=None,
+                success=False,
+                message=str(e)
+            )
+
+
+# ==========================================
+# MUTATIONS - CREAR
+# ==========================================
+
+class CrearCelo(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        hembra_id = graphene.ID(required=True)
+        fecha_inicio = graphene.Date(required=True)
+        fecha_fin = graphene.Date()
+        tipo = graphene.String()
+        intensidad = graphene.String()
+        detectado_por = graphene.String()
+        observaciones = graphene.String()
+    
+    celo = graphene.Field(CeloType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, finca_id, hembra_id, fecha_inicio, **kwargs):
+        try:
+            finca = Finca.objects.get(id=finca_id)
+            hembra = Animal.objects.get(id=hembra_id, finca=finca)
+            
+            celo = Celo.objects.create(
+                finca=finca,
+                hembra=hembra,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=kwargs.get('fecha_fin'),
+                tipo=kwargs.get('tipo', 'NATURAL'),
+                intensidad=kwargs.get('intensidad', 'MEDIA'),
+                detectado_por=kwargs.get('detectado_por', ''),
+                observaciones=kwargs.get('observaciones', ''),
+                registrado_por=info.context.user
+            )
+            return CrearCelo(celo=celo, success=True, message="Celo registrado exitosamente")
+        except Exception as e:
+            return CrearCelo(celo=None, success=False, message=str(e))
+
+
+class CrearPalpacion(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        hembra_id = graphene.ID(required=True)
+        fecha = graphene.Date(required=True)
+        resultado = graphene.String(required=True)
+        dias_gestacion_estimados = graphene.Int()
+        observaciones = graphene.String()
+        veterinario_id = graphene.ID()
+    
+    palpacion = graphene.Field(PalpacionType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, finca_id, hembra_id, fecha, resultado, **kwargs):
+        try:
+            finca = Finca.objects.get(id=finca_id)
+            hembra = Animal.objects.get(id=hembra_id, finca=finca)
+            
+            palpacion = Palpacion.objects.create(
+                finca=finca,
+                hembra=hembra,
+                fecha=fecha,
+                resultado=resultado,
+                dias_gestacion_estimados=kwargs.get('dias_gestacion_estimados'),
+                observaciones=kwargs.get('observaciones', ''),
+                veterinario_id=kwargs.get('veterinario_id'),
+                registrado_por=info.context.user
+            )
+            return CrearPalpacion(palpacion=palpacion, success=True, message="PalpaciÃ³n registrada exitosamente")
+        except Exception as e:
+            return CrearPalpacion(palpacion=None, success=False, message=str(e))
+
+
+class CrearHembraRepetidora(graphene.Mutation):
+    class Arguments:
+        animal_id = graphene.ID(required=True)
+        numero_servicios = graphene.Int()
+        causa_presunta = graphene.String()
+    
+    hembra_repetidora = graphene.Field(HembraRepetidoraType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, animal_id, **kwargs):
+        try:
+            animal = Animal.objects.get(id=animal_id)
+            
+            repetidora, created = HembraRepetidora.objects.get_or_create(
+                animal=animal,
+                defaults={
+                    'numero_servicios': kwargs.get('numero_servicios', 1),
+                    'causa_presunta': kwargs.get('causa_presunta', '')
+                }
+            )
+            
+            if not created and kwargs.get('numero_servicios'):
+                repetidora.numero_servicios = kwargs['numero_servicios']
+                repetidora.save()
+            
+            return CrearHembraRepetidora(
+                hembra_repetidora=repetidora,
+                success=True,
+                message="Hembra repetidora registrada" if created else "Actualizada"
+            )
+        except Exception as e:
+            return CrearHembraRepetidora(hembra_repetidora=None, success=False, message=str(e))
+
+
+class CrearAbortoDetallado(graphene.Mutation):
+    class Arguments:
+        reproduccion_id = graphene.ID(required=True)
+        causa = graphene.String(required=True)
+        descripcion = graphene.String(required=True)
+        semanas_gestacion = graphene.Int(required=True)
+        estado_feto = graphene.String()
+        tratamiento_aplicado = graphene.String()
+        medidas_preventivas = graphene.String()
+        costo_asociado = graphene.Float()
+    
+    aborto = graphene.Field(AbortoDetalladoType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, reproduccion_id, causa, descripcion, semanas_gestacion, **kwargs):
+        try:
+            reproduccion = Reproduccion.objects.get(id=reproduccion_id)
+            
+            aborto = AbortoDetallado.objects.create(
+                reproduccion=reproduccion,
+                causa=causa,
+                descripcion=descripcion,
+                semanas_gestacion=semanas_gestacion,
+                estado_feto=kwargs.get('estado_feto'),
+                tratamiento_aplicado=kwargs.get('tratamiento_aplicado', ''),
+                medidas_preventivas=kwargs.get('medidas_preventivas', ''),
+                costo_asociado=kwargs.get('costo_asociado', 0)
+            )
+            
+            return CrearAbortoDetallado(aborto=aborto, success=True, message="Aborto registrado en detalle")
+        except Exception as e:
+            return CrearAbortoDetallado(aborto=None, success=False, message=str(e))
+
+
+class CrearDestete(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        madre_id = graphene.ID(required=True)
+        cria_id = graphene.ID(required=True)
+        fecha_destete = graphene.Date(required=True)
+        tipo = graphene.String()
+        edad_destete_dias = graphene.Int(required=True)
+        peso_cria = graphene.Float()
+        estado_cria = graphene.String()
+        observaciones = graphene.String()
+    
+    destete = graphene.Field(DesteteType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, finca_id, madre_id, cria_id, fecha_destete, edad_destete_dias, **kwargs):
+        try:
+            finca = Finca.objects.get(id=finca_id)
+            madre = Animal.objects.get(id=madre_id, finca=finca)
+            cria = Animal.objects.get(id=cria_id, finca=finca)
+            
+            destete = Destete.objects.create(
+                finca=finca,
+                madre=madre,
+                cria=cria,
+                fecha_destete=fecha_destete,
+                tipo=kwargs.get('tipo', 'NATURAL'),
+                edad_destete_dias=edad_destete_dias,
+                peso_cria=kwargs.get('peso_cria'),
+                estado_cria=kwargs.get('estado_cria', ''),
+                observaciones=kwargs.get('observaciones', ''),
+                registrado_por=info.context.user
+            )
+            
+            return CrearDestete(destete=destete, success=True, message="Destete registrado exitosamente")
+        except Exception as e:
+            return CrearDestete(destete=None, success=False, message=str(e))
+
+
+# ==========================================
+# MUTATIONS - ACTUALIZAR Y ELIMINAR (CRUD)
+# ==========================================
+
+# ========== CELOS ==========
+class ActualizarCelo(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        fecha_inicio = graphene.Date()
+        fecha_fin = graphene.Date()
+        tipo = graphene.String()
+        intensidad = graphene.String()
+        detectado_por = graphene.String()
+        observaciones = graphene.String()
+    
+    celo = graphene.Field(CeloType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            celo = Celo.objects.get(id=id)
+            if kwargs.get('fecha_inicio'):
+                celo.fecha_inicio = kwargs['fecha_inicio']
+            if kwargs.get('fecha_fin'):
+                celo.fecha_fin = kwargs['fecha_fin']
+            if kwargs.get('tipo'):
+                celo.tipo = kwargs['tipo']
+            if kwargs.get('intensidad'):
+                celo.intensidad = kwargs['intensidad']
+            if kwargs.get('detectado_por'):
+                celo.detectado_por = kwargs['detectado_por']
+            if kwargs.get('observaciones') is not None:
+                celo.observaciones = kwargs['observaciones']
+            celo.save()
+            return ActualizarCelo(celo=celo, success=True, message="Celo actualizado exitosamente")
+        except Exception as e:
+            return ActualizarCelo(celo=None, success=False, message=str(e))
+
+
+class EliminarCelo(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, id):
+        try:
+            celo = Celo.objects.get(id=id)
+            celo.delete()
+            return EliminarCelo(success=True, message="Celo eliminado exitosamente")
+        except Exception as e:
+            return EliminarCelo(success=False, message=str(e))
+
+
+# ========== PALPACIONES ==========
+class ActualizarPalpacion(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        fecha = graphene.Date()
+        resultado = graphene.String()
+        dias_gestacion_estimados = graphene.Int()
+        observaciones = graphene.String()
+        veterinario_id = graphene.ID()
+    
+    palpacion = graphene.Field(PalpacionType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            palpacion = Palpacion.objects.get(id=id)
+            if kwargs.get('fecha'):
+                palpacion.fecha = kwargs['fecha']
+            if kwargs.get('resultado'):
+                palpacion.resultado = kwargs['resultado']
+            if kwargs.get('dias_gestacion_estimados'):
+                palpacion.dias_gestacion_estimados = kwargs['dias_gestacion_estimados']
+            if kwargs.get('observaciones') is not None:
+                palpacion.observaciones = kwargs['observaciones']
+            if kwargs.get('veterinario_id'):
+                palpacion.veterinario = Veterinario.objects.get(id=kwargs['veterinario_id'])
+            palpacion.save()
+            return ActualizarPalpacion(palpacion=palpacion, success=True, message="PalpaciÃ³n actualizada exitosamente")
+        except Exception as e:
+            return ActualizarPalpacion(palpacion=None, success=False, message=str(e))
+
+
+class EliminarPalpacion(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, id):
+        try:
+            palpacion = Palpacion.objects.get(id=id)
+            palpacion.delete()
+            return EliminarPalpacion(success=True, message="PalpaciÃ³n eliminada exitosamente")
+        except Exception as e:
+            return EliminarPalpacion(success=False, message=str(e))
+
+
+# ========== DESTETES ==========
+class ActualizarDestete(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        fecha_destete = graphene.Date()
+        tipo = graphene.String()
+        edad_destete_dias = graphene.Int()
+        peso_cria = graphene.Float()
+        estado_cria = graphene.String()
+        observaciones = graphene.String()
+    
+    destete = graphene.Field(DesteteType)
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        try:
+            destete = Destete.objects.get(id=id)
+            if kwargs.get('fecha_destete'):
+                destete.fecha_destete = kwargs['fecha_destete']
+            if kwargs.get('tipo'):
+                destete.tipo = kwargs['tipo']
+            if kwargs.get('edad_destete_dias'):
+                destete.edad_destete_dias = kwargs['edad_destete_dias']
+            if kwargs.get('peso_cria'):
+                destete.peso_cria = kwargs['peso_cria']
+            if kwargs.get('estado_cria'):
+                destete.estado_cria = kwargs['estado_cria']
+            if kwargs.get('observaciones') is not None:
+                destete.observaciones = kwargs['observaciones']
+            destete.save()
+            return ActualizarDestete(destete=destete, success=True, message="Destete actualizado exitosamente")
+        except Exception as e:
+            return ActualizarDestete(destete=None, success=False, message=str(e))
+
+
+class EliminarDestete(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    @login_required
+    def mutate(self, info, id):
+        try:
+            destete = Destete.objects.get(id=id)
+            destete.delete()
+            return EliminarDestete(success=True, message="Destete eliminado exitosamente")
+        except Exception as e:
+            return EliminarDestete(success=False, message=str(e))
+
+
+# ==========================================
+# MUTATION PRINCIPAL
+# ==========================================
+
+class Mutation(graphene.ObjectType):
+    # Mutations existentes
+    crear_inseminacion_artificial = CrearInseminacionArtificial.Field()
+    crear_diagnostico_prenez = CrearDiagnosticoPrenez.Field()
+    crear_reproduccion = CrearReproduccion.Field()
+    registrar_parto_con_crias = RegistrarPartoConCrias.Field()
+    
+    # Mutations - Crear
+    crear_celo = CrearCelo.Field()
+    crear_palpacion = CrearPalpacion.Field()
+    crear_hembra_repetidora = CrearHembraRepetidora.Field()
+    crear_aborto_detallado = CrearAbortoDetallado.Field()
+    crear_destete = CrearDestete.Field()
+    
+    # Mutations - Actualizar y Eliminar
+    actualizar_celo = ActualizarCelo.Field()
+    eliminar_celo = EliminarCelo.Field()
+    actualizar_palpacion = ActualizarPalpacion.Field()
+    eliminar_palpacion = EliminarPalpacion.Field()
+    actualizar_destete = ActualizarDestete.Field()
+    eliminar_destete = EliminarDestete.Field()
+from django.shortcuts import render
+
+# Create your views here.
+from datetime import date
+from decimal import Decimal
+
+from django.conf import settings
+from django.db import models
+
+from fincas.models import Finca
+from animales.models import Animal
+from catalogos.models import Alimento
+from reproduccion.models import Reproduccion
+
+
+class RegistroPeso(models.Model):
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="registros_peso"
+    )
+    animal = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="registros_peso"
+    )
+
+    fecha_pesaje = models.DateField()
+    peso_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    observacion = models.TextField(blank=True, null=True)
+
+    ganancia_diaria = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+    condicion_corporal = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=0,
+        help_text="Escala corporal, por ejemplo 1 a 5"
+    )
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="registros_peso_creados"
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_pesaje"]
+        verbose_name = "Registro de peso"
+        verbose_name_plural = "Registros de peso"
+
+    def save(self, *args, **kwargs):
+        peso_anterior = (
+            RegistroPeso.objects
+            .filter(animal=self.animal, fecha_pesaje__lt=self.fecha_pesaje)
+            .order_by("-fecha_pesaje")
+            .first()
+        )
+
+        if peso_anterior:
+            dias = (self.fecha_pesaje - peso_anterior.fecha_pesaje).days
+            if dias > 0:
+                diferencia = self.peso_kg - peso_anterior.peso_kg
+                self.ganancia_diaria = diferencia / dias
+
+        super().save(*args, **kwargs)
+
+        # El peso actual del animal refleja siempre el pesaje mÃ¡s reciente
+        # (no se sobreescribe con un pesaje retroactivo mÃ¡s antiguo).
+        ultimo = (
+            RegistroPeso.objects
+            .filter(animal=self.animal)
+            .order_by("-fecha_pesaje", "-fecha_registro")
+            .first()
+        )
+        if ultimo:
+            self.animal.peso = ultimo.peso_kg
+            self.animal.save(update_fields=["peso"])
+
+        # Si el animal tiene un engorde activo, recalcular su estado productivo
+        # (dÃ­as, ganancia y peso faltante son propiedades derivadas; aquÃ­ solo
+        # se actualiza el estado a LISTO_VENTA al alcanzar el peso objetivo).
+        engorde = self.animal.engordes.filter(estado="EN_ENGORDE").first()
+        if engorde:
+            engorde.actualizar_estado()
+
+    def __str__(self):
+        return f"{self.animal} - {self.peso_kg} kg - {self.fecha_pesaje}"
+
+
+class Lactancia(models.Model):
+    ESTADO_LACTANCIA_CHOICES = [
+        ("ACTIVA", "Activa"),
+        ("SECADA", "Secada"),
+        ("FINALIZADA", "Finalizada"),
+    ]
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="lactancias"
+    )
+    vaca = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="lactancias"
+    )
+    reproduccion = models.ForeignKey(
+        Reproduccion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lactancias"
+    )
+
+    numero_lactancia = models.IntegerField(default=1)
+    fecha_inicio = models.DateField()
+    fecha_secado = models.DateField(blank=True, null=True)
+
+    dias_produccion = models.IntegerField(default=0)
+    total_litros = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    promedio_diario = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    ajuste_305_dias = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    estado = models.CharField(
+        max_length=30,
+        choices=ESTADO_LACTANCIA_CHOICES,
+        default="ACTIVA"
+    )
+
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_inicio"]
+        verbose_name = "Lactancia"
+        verbose_name_plural = "Lactancias"
+
+    def recalcular_totales(self):
+        registros = self.producciones_leche.all()
+
+        total = sum([registro.litros for registro in registros])
+        self.total_litros = total
+
+        if self.fecha_secado:
+            self.dias_produccion = (self.fecha_secado - self.fecha_inicio).days + 1
+            self.estado = "SECADA"
+        else:
+            ultima_produccion = registros.order_by("-fecha").first()
+            if ultima_produccion:
+                self.dias_produccion = (ultima_produccion.fecha - self.fecha_inicio).days + 1
+
+        if self.dias_produccion > 0:
+            self.promedio_diario = self.total_litros / self.dias_produccion
+            self.ajuste_305_dias = self.promedio_diario * 305
+
+        self.save(update_fields=[
+            "total_litros",
+            "dias_produccion",
+            "promedio_diario",
+            "ajuste_305_dias",
+            "estado",
+        ])
+
+    def __str__(self):
+        return f"Lactancia {self.numero_lactancia} - {self.vaca}"
+
+
+class ProduccionLeche(models.Model):
+    TURNO_CHOICES = [
+        ("MANIANA", "MaÃ±ana"),
+        ("TARDE", "Tarde"),
+        ("NOCHE", "Noche"),
+    ]
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="producciones_leche"
+    )
+    vaca = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="producciones_leche"
+    )
+    lactancia = models.ForeignKey(
+        Lactancia,
+        on_delete=models.CASCADE,
+        related_name="producciones_leche"
+    )
+
+    fecha = models.DateField()
+    turno = models.CharField(max_length=20, choices=TURNO_CHOICES)
+    litros = models.DecimalField(max_digits=10, decimal_places=2)
+    dias_en_lactancia = models.IntegerField(default=0)
+
+    observaciones = models.TextField(blank=True, null=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="producciones_leche_registradas"
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha"]
+        verbose_name = "ProducciÃ³n de leche"
+        verbose_name_plural = "Producciones de leche"
+
+    def save(self, *args, **kwargs):
+        if self.lactancia and self.fecha:
+            self.dias_en_lactancia = (
+                self.fecha - self.lactancia.fecha_inicio
+            ).days + 1
+
+        super().save(*args, **kwargs)
+
+        if self.lactancia:
+            self.lactancia.recalcular_totales()
+
+    def __str__(self):
+        return f"{self.vaca} - {self.fecha} - {self.litros} L"
+
+
+class AlimentoAnimal(models.Model):
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="alimentaciones_animales"
+    )
+    animal = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="alimentaciones"
+    )
+    alimento = models.ForeignKey(
+        Alimento,
+        on_delete=models.CASCADE,
+        related_name="suministros_animales"
+    )
+
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2)
+    fecha_alimentacion = models.DateField()
+    observaciones = models.TextField(blank=True, null=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="alimentaciones_registradas"
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_alimentacion"]
+        verbose_name = "AlimentaciÃ³n animal"
+        verbose_name_plural = "Alimentaciones animales"
+
+    def __str__(self):
+        return f"{self.animal} - {self.alimento} - {self.cantidad}"
+
+
+class EngordeAnimal(models.Model):
+    """Control de engorde / producciÃ³n de carne de un animal.
+
+    Un animal CARNE o DOBLE_PROPOSITO entra en engorde con un peso inicial y
+    un peso objetivo. Los dÃ­as en engorde, la ganancia diaria y el peso
+    faltante se derivan del Ãºltimo pesaje registrado (no se almacenan), de modo
+    que el Registro de Peso alimenta automÃ¡ticamente este control.
+    """
+
+    TIPO_ENGORDE_CHOICES = [
+        ("INTENSIVO", "Intensivo"),
+        ("EXTENSIVO", "Extensivo"),
+        ("SEMI_INTENSIVO", "Semi-intensivo"),
+    ]
+
+    ESTADO_CHOICES = [
+        ("EN_ENGORDE", "En engorde"),
+        ("LISTO_VENTA", "Listo para venta"),
+        ("RETIRADO", "Retirado"),
+        ("VENDIDO", "Vendido"),
+    ]
+
+    # Estados productivos que mantienen el engorde "abierto"
+    ESTADOS_ACTIVOS = ("EN_ENGORDE", "LISTO_VENTA")
+
+    finca = models.ForeignKey(
+        Finca,
+        on_delete=models.CASCADE,
+        related_name="engordes"
+    )
+    animal = models.ForeignKey(
+        Animal,
+        on_delete=models.CASCADE,
+        related_name="engordes"
+    )
+
+    fecha_inicio = models.DateField()
+    peso_inicial = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    peso_objetivo = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    tipo_engorde = models.CharField(
+        max_length=20,
+        choices=TIPO_ENGORDE_CHOICES,
+        default="SEMI_INTENSIVO"
+    )
+    lote_grupo = models.CharField(max_length=100, blank=True, null=True)
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default="EN_ENGORDE"
+    )
+
+    observaciones = models.TextField(blank=True, null=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="engordes_registrados"
+    )
+
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_inicio"]
+        verbose_name = "Engorde de animal"
+        verbose_name_plural = "Engordes de animales"
+        indexes = [
+            models.Index(fields=["finca", "estado"], name="eng_finca_estado_idx"),
+            models.Index(fields=["animal", "estado"], name="eng_animal_estado_idx"),
+        ]
+
+    # --- Datos derivados (no se almacenan; dependen del Ãºltimo pesaje) ---
+    @property
+    def peso_actual(self):
+        return self.animal.peso or Decimal("0")
+
+    @property
+    def ultimo_pesaje_fecha(self):
+        ultimo = self.animal.registros_peso.order_by("-fecha_pesaje").first()
+        return ultimo.fecha_pesaje if ultimo else None
+
+    @property
+    def dias_en_engorde(self):
+        ref = self.ultimo_pesaje_fecha or date.today()
+        dias = (ref - self.fecha_inicio).days
+        return dias if dias > 0 else 0
+
+    @property
+    def ganancia_diaria(self):
+        dias = self.dias_en_engorde
+        if dias <= 0:
+            return Decimal("0")
+        return (self.peso_actual - self.peso_inicial) / dias
+
+    @property
+    def peso_faltante(self):
+        faltante = self.peso_objetivo - self.peso_actual
+        return faltante if faltante > 0 else Decimal("0")
+
+    def actualizar_estado(self):
+        """Pasa el engorde a LISTO_VENTA cuando alcanza el peso objetivo."""
+        if self.estado == "EN_ENGORDE" and self.peso_actual >= self.peso_objetivo:
+            self.estado = "LISTO_VENTA"
+            self.save(update_fields=["estado"])
+
+    def __str__(self):
+        return f"Engorde {self.animal} ({self.estado})"
+# backend/produccion/schema.py
+import graphene
+from graphene_django import DjangoObjectType
+from graphql_jwt.decorators import login_required
+from django.db.models import Sum, Avg
+from decimal import Decimal
+from datetime import date
+
+from .models import (
+    RegistroPeso,
+    Lactancia,
+    ProduccionLeche,
+    AlimentoAnimal,
+    EngordeAnimal,
+)
+
+
+# ==========================================
+# TYPES
+# ==========================================
+
+class RegistroPesoType(DjangoObjectType):
+    class Meta:
+        model = RegistroPeso
+        fields = "__all__"
+
+
+class LactanciaType(DjangoObjectType):
+    class Meta:
+        model = Lactancia
+        fields = "__all__"
+
+
+class ProduccionLecheType(DjangoObjectType):
+    class Meta:
+        model = ProduccionLeche
+        fields = "__all__"
+
+
+class AlimentoAnimalType(DjangoObjectType):
+    class Meta:
+        model = AlimentoAnimal
+        fields = "__all__"
+
+
+class EngordeAnimalType(DjangoObjectType):
+    # Datos derivados expuestos al frontend (propiedades del modelo)
+    peso_actual = graphene.Decimal()
+    dias_en_engorde = graphene.Int()
+    ganancia_diaria = graphene.Decimal()
+    peso_faltante = graphene.Decimal()
+    ultimo_pesaje_fecha = graphene.Date()
+
+    class Meta:
+        model = EngordeAnimal
+        fields = "__all__"
+
+    def resolve_peso_actual(self, info):
+        return self.peso_actual
+
+    def resolve_dias_en_engorde(self, info):
+        return self.dias_en_engorde
+
+    def resolve_ganancia_diaria(self, info):
+        return self.ganancia_diaria
+
+    def resolve_peso_faltante(self, info):
+        return self.peso_faltante
+
+    def resolve_ultimo_pesaje_fecha(self, info):
+        return self.ultimo_pesaje_fecha
+
+
+class ResumenProduccionType(graphene.ObjectType):
+    """Resumen consolidado del mÃ³dulo de ProducciÃ³n.
+
+    Fuente Ãºnica de los indicadores productivos: lo consume la pestaÃ±a
+    "Resumen Productivo" del mÃ³dulo y puede reutilizarse en el Dashboard
+    principal sin duplicar los cÃ¡lculos.
+    """
+    produccion_leche_hoy = graphene.Decimal()
+    promedio_litros_vaca = graphene.Decimal()
+    lactancias_activas = graphene.Int()
+    animales_engorde = graphene.Int()
+    ganancia_diaria_promedio = graphene.Decimal()
+    animales_sin_pesaje = graphene.Int()
+    animales_listos_venta = graphene.Int()
+
+
+# ==========================================
+# QUERY
+# ==========================================
+
+class Query(graphene.ObjectType):
+    registros_peso = graphene.List(RegistroPesoType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
+    lactancias = graphene.List(LactanciaType, finca_id=graphene.ID(required=True))
+    lactancias_activas = graphene.List(LactanciaType, finca_id=graphene.ID(required=True))
+    producciones_leche = graphene.List(ProduccionLecheType, finca_id=graphene.ID(required=True))
+    producciones_hoy = graphene.List(ProduccionLecheType, finca_id=graphene.ID(required=True))
+    alimentaciones_animales = graphene.List(AlimentoAnimalType, finca_id=graphene.ID(required=True))
+    
+    produccion_leche_por_animal = graphene.List(
+        ProduccionLecheType,
+        animal_id=graphene.ID(required=True)
+    )
+    
+    produccion_leche_por_anio = graphene.List(
+        ProduccionLecheType,
+        anio=graphene.Int(required=True),
+        finca_id=graphene.ID(),
+    )
+    
+    produccion_total_hoy = graphene.Decimal(finca_id=graphene.ID(required=True))
+    top_5_vacas_produccion = graphene.List(ProduccionLecheType, finca_id=graphene.ID(required=True))
+
+    # Resumen consolidado del mÃ³dulo (KPIs de la pestaÃ±a "Resumen Productivo")
+    resumen_produccion = graphene.Field(
+        ResumenProduccionType,
+        finca_id=graphene.ID(required=True),
+        peso_venta=graphene.Decimal(default_value=Decimal('450')),
+    )
+
+    # Engorde / producciÃ³n de carne
+    engordes = graphene.List(EngordeAnimalType, finca_id=graphene.ID(required=True))
+    engordes_activos = graphene.List(EngordeAnimalType, finca_id=graphene.ID(required=True))
+
+    def resolve_engordes(self, info, finca_id):
+        return EngordeAnimal.objects.filter(
+            finca_id=finca_id
+        ).select_related('animal', 'animal__raza', 'animal__categoria')
+
+    def resolve_engordes_activos(self, info, finca_id):
+        return EngordeAnimal.objects.filter(
+            finca_id=finca_id, estado__in=EngordeAnimal.ESTADOS_ACTIVOS
+        ).select_related('animal', 'animal__raza', 'animal__categoria')
+
+    def resolve_registros_peso(self, info, finca_id, animal_id=None):
+        queryset = RegistroPeso.objects.filter(finca_id=finca_id)
+        if animal_id:
+            queryset = queryset.filter(animal_id=animal_id)
+        return queryset
+
+    def resolve_lactancias(self, info, finca_id):
+        return Lactancia.objects.filter(finca_id=finca_id)
+
+    def resolve_lactancias_activas(self, info, finca_id):
+        return Lactancia.objects.filter(finca_id=finca_id, estado='ACTIVA')
+
+    def resolve_producciones_leche(self, info, finca_id):
+        return ProduccionLeche.objects.filter(finca_id=finca_id)
+
+    def resolve_producciones_hoy(self, info, finca_id):
+        return ProduccionLeche.objects.filter(finca_id=finca_id, fecha=date.today())
+
+    def resolve_alimentaciones_animales(self, info, finca_id):
+        return AlimentoAnimal.objects.filter(finca_id=finca_id)
+
+    @login_required
+    def resolve_produccion_leche_por_animal(self, info, animal_id):
+        from accounts.permissions import ids_fincas_visibles
+        return ProduccionLeche.objects.filter(
+            vaca_id=animal_id, finca_id__in=ids_fincas_visibles(info.context.user)
+        )
+
+    @login_required
+    def resolve_produccion_leche_por_anio(self, info, anio, finca_id=None):
+        from accounts.permissions import scope_ids
+        return ProduccionLeche.objects.filter(
+            fecha__year=anio, finca_id__in=scope_ids(info.context.user, finca_id)
+        )
+    
+    def resolve_produccion_total_hoy(self, info, finca_id):
+        total = ProduccionLeche.objects.filter(
+            finca_id=finca_id, 
+            fecha=date.today()
+        ).aggregate(total=Sum('litros'))['total']
+        return total or Decimal('0')
+    
+    def resolve_top_5_vacas_produccion(self, info, finca_id):
+        from django.db.models import Sum
+        resultados = []
+        vacas = ProduccionLeche.objects.filter(
+            finca_id=finca_id, 
+            fecha=date.today()
+        ).values('vaca_id').annotate(total=Sum('litros')).order_by('-total')[:5]
+        
+        for item in vacas:
+            producciones = ProduccionLeche.objects.filter(
+                finca_id=finca_id,
+                fecha=date.today(),
+                vaca_id=item['vaca_id']
+            )
+            for prod in producciones:
+                resultados.append(prod)
+        return resultados
+
+    def resolve_resumen_produccion(self, info, finca_id, peso_venta=Decimal('450')):
+        """Calcula en un solo lugar los indicadores del mÃ³dulo de ProducciÃ³n.
+
+        - Leche: producciÃ³n total de hoy y promedio diario por vaca en lactancia.
+        - Carne / engorde: animales en engorde, ganancia diaria media y listos
+          para venta (peso actual >= umbral, configurable vÃ­a `peso_venta`).
+        - Pesaje: animales activos sin ningÃºn registro de peso.
+
+        El campo `tipo_produccion` del animal decide quÃ© cuenta como engorde:
+        CARNE y DOBLE_PROPOSITO participan en carne/engorde y pesajes.
+        """
+        from animales.models import Animal
+
+        hoy = date.today()
+
+        # --- Leche ---
+        leche_hoy = ProduccionLeche.objects.filter(
+            finca_id=finca_id, fecha=hoy
+        ).aggregate(total=Sum('litros'))['total'] or Decimal('0')
+
+        activas = Lactancia.objects.filter(finca_id=finca_id, estado='ACTIVA')
+        promedio_litros_vaca = activas.aggregate(p=Avg('promedio_diario'))['p'] or Decimal('0')
+
+        # --- Carne / engorde (a partir del control de engorde activo) ---
+        animales_activos = Animal.objects.filter(finca_id=finca_id, estado='ACTIVO')
+        engordes_activos = EngordeAnimal.objects.filter(
+            finca_id=finca_id, estado__in=EngordeAnimal.ESTADOS_ACTIVOS
+        ).select_related('animal')
+
+        animales_engorde = engordes_activos.count()
+        animales_listos_venta = engordes_activos.filter(estado='LISTO_VENTA').count()
+
+        # Ganancia diaria promedio: media de la ganancia derivada de cada engorde
+        # activo (propiedad calculada a partir del Ãºltimo pesaje).
+        ganancias = [e.ganancia_diaria for e in engordes_activos]
+        ganancia_diaria_promedio = (
+            sum(ganancias) / len(ganancias) if ganancias else Decimal('0')
+        )
+
+        # --- Pesaje: animales activos sin ningÃºn registro de peso ---
+        animales_sin_pesaje = animales_activos.filter(
+            registros_peso__isnull=True
+        ).count()
+
+        return ResumenProduccionType(
+            produccion_leche_hoy=leche_hoy,
+            promedio_litros_vaca=promedio_litros_vaca,
+            lactancias_activas=activas.count(),
+            animales_engorde=animales_engorde,
+            ganancia_diaria_promedio=ganancia_diaria_promedio,
+            animales_sin_pesaje=animales_sin_pesaje,
+            animales_listos_venta=animales_listos_venta,
+        )
+
+
+# ==========================================
+# MUTATIONS - REGISTRO PESO
+# ==========================================
+
+class CrearRegistroPeso(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        animal_id = graphene.ID(required=True)
+        peso_kg = graphene.Decimal(required=True)
+        fecha_pesaje = graphene.Date(required=True)
+        condicion_corporal = graphene.Decimal()
+        observacion = graphene.String()
+
+    registro = graphene.Field(RegistroPesoType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, animal_id, peso_kg, fecha_pesaje, **kwargs):
+        try:
+            from fincas.models import Finca
+            from animales.models import Animal
+
+            # --- Validaciones bÃ¡sicas (Fase 1) ---
+            if peso_kg is None or peso_kg < 0:
+                return CrearRegistroPeso(
+                    registro=None, success=False,
+                    message="El peso no puede ser negativo"
+                )
+
+            finca = Finca.objects.get(id=finca_id)
+            animal = Animal.objects.get(id=animal_id)
+
+            estados_no_validos = ("VENDIDO", "MUERTO", "BAJA", "MATADERO", "DESCARTE")
+            if animal.estado in estados_no_validos:
+                return CrearRegistroPeso(
+                    registro=None, success=False,
+                    message=f"No se puede registrar peso a un animal en estado {animal.get_estado_display()}"
+                )
+
+            registro = RegistroPeso.objects.create(
+                finca=finca,
+                animal=animal,
+                fecha_pesaje=fecha_pesaje,
+                peso_kg=peso_kg,
+                condicion_corporal=kwargs.get('condicion_corporal', 0),
+                observacion=kwargs.get('observacion', ''),
+                registrado_por=info.context.user
+            )
+
+            return CrearRegistroPeso(
+                registro=registro, 
+                success=True, 
+                message=f"Peso registrado para {animal.nro_arete}"
+            )
+        except Exception as e:
+            return CrearRegistroPeso(registro=None, success=False, message=str(e))
+
+
+# ==========================================
+# MUTATIONS - LACTANCIA
+# ==========================================
+
+class CrearLactancia(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        vaca_id = graphene.ID(required=True)
+        numero_lactancia = graphene.Int()
+        fecha_inicio = graphene.Date(required=True)
+        reproduccion_id = graphene.ID()
+        observaciones = graphene.String()
+
+    lactancia = graphene.Field(LactanciaType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, vaca_id, fecha_inicio, **kwargs):
+        try:
+            from fincas.models import Finca
+            from animales.models import Animal
+
+            finca = Finca.objects.get(id=finca_id)
+            vaca = Animal.objects.get(id=vaca_id)
+
+            lactancia = Lactancia.objects.create(
+                finca=finca,
+                vaca=vaca,
+                numero_lactancia=kwargs.get('numero_lactancia', 1),
+                fecha_inicio=fecha_inicio,
+                reproduccion_id=kwargs.get('reproduccion_id'),
+                observaciones=kwargs.get('observaciones', '')
+            )
+
+            return CrearLactancia(
+                lactancia=lactancia, 
+                success=True, 
+                message=f"Lactancia iniciada para {vaca.nro_arete}"
+            )
+        except Exception as e:
+            return CrearLactancia(lactancia=None, success=False, message=str(e))
+
+
+class SecarLactancia(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        fecha_secado = graphene.Date(required=True)
+
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, fecha_secado):
+        try:
+            lactancia = Lactancia.objects.get(id=id)
+            lactancia.fecha_secado = fecha_secado
+            lactancia.estado = 'SECADA'
+            lactancia.save()
+            return SecarLactancia(success=True, message="Lactancia finalizada")
+        except Exception as e:
+            return SecarLactancia(success=False, message=str(e))
+
+
+# ==========================================
+# MUTATIONS - PRODUCCION LECHE
+# ==========================================
+
+class CrearProduccionLeche(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        vaca_id = graphene.ID(required=True)
+        turno = graphene.String(required=True)
+        litros = graphene.Decimal(required=True)
+        observaciones = graphene.String()
+
+    produccion = graphene.Field(ProduccionLecheType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, vaca_id, turno, litros, **kwargs):
+        try:
+            from fincas.models import Finca
+            from animales.models import Animal
+
+            finca = Finca.objects.get(id=finca_id)
+            vaca = Animal.objects.get(id=vaca_id)
+            
+            # Buscar lactancia activa
+            lactancia = Lactancia.objects.filter(
+                finca_id=finca_id, 
+                vaca_id=vaca_id, 
+                estado='ACTIVA'
+            ).first()
+            
+            if not lactancia:
+                return CrearProduccionLeche(
+                    produccion=None, 
+                    success=False, 
+                    message="La vaca no tiene una lactancia activa"
+                )
+
+            produccion = ProduccionLeche.objects.create(
+                finca=finca,
+                vaca=vaca,
+                lactancia=lactancia,
+                fecha=date.today(),
+                turno=turno,
+                litros=litros,
+                observaciones=kwargs.get('observaciones', ''),
+                registrado_por=info.context.user
+            )
+
+            return CrearProduccionLeche(
+                produccion=produccion, 
+                success=True, 
+                message=f"ProducciÃ³n registrada: {litros} L"
+            )
+        except Exception as e:
+            return CrearProduccionLeche(produccion=None, success=False, message=str(e))
+
+
+# ==========================================
+# MUTATIONS - ENGORDE / CARNE
+# ==========================================
+
+class IniciarEngorde(graphene.Mutation):
+    class Arguments:
+        finca_id = graphene.ID(required=True)
+        animal_id = graphene.ID(required=True)
+        fecha_inicio = graphene.Date(required=True)
+        peso_inicial = graphene.Decimal(required=True)
+        peso_objetivo = graphene.Decimal(required=True)
+        tipo_engorde = graphene.String()
+        lote_grupo = graphene.String()
+        observaciones = graphene.String()
+
+    engorde = graphene.Field(EngordeAnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, finca_id, animal_id, fecha_inicio,
+               peso_inicial, peso_objetivo, **kwargs):
+        try:
+            from fincas.models import Finca
+            from animales.models import Animal
+
+            animal = Animal.objects.get(id=animal_id)
+
+            # --- Validaciones ---
+            if animal.estado != "ACTIVO":
+                return IniciarEngorde(
+                    engorde=None, success=False,
+                    message=f"No se puede iniciar engorde de un animal en estado {animal.get_estado_display()}"
+                )
+
+            if animal.tipo_produccion not in ("CARNE", "DOBLE_PROPOSITO"):
+                return IniciarEngorde(
+                    engorde=None, success=False,
+                    message="Solo los animales de tipo Carne o Doble propÃ³sito pueden entrar en engorde"
+                )
+
+            if peso_inicial is None or peso_inicial < 0:
+                return IniciarEngorde(
+                    engorde=None, success=False,
+                    message="El peso inicial no puede ser negativo"
+                )
+
+            if peso_objetivo is None or peso_objetivo < peso_inicial:
+                return IniciarEngorde(
+                    engorde=None, success=False,
+                    message="El peso objetivo no puede ser menor al peso inicial"
+                )
+
+            existe_activo = EngordeAnimal.objects.filter(
+                animal=animal, estado__in=EngordeAnimal.ESTADOS_ACTIVOS
+            ).exists()
+            if existe_activo:
+                return IniciarEngorde(
+                    engorde=None, success=False,
+                    message="El animal ya tiene un engorde activo"
+                )
+
+            finca = Finca.objects.get(id=finca_id)
+
+            engorde = EngordeAnimal.objects.create(
+                finca=finca,
+                animal=animal,
+                fecha_inicio=fecha_inicio,
+                peso_inicial=peso_inicial,
+                peso_objetivo=peso_objetivo,
+                tipo_engorde=kwargs.get('tipo_engorde') or 'SEMI_INTENSIVO',
+                lote_grupo=kwargs.get('lote_grupo', ''),
+                observaciones=kwargs.get('observaciones', ''),
+                registrado_por=info.context.user,
+            )
+            # Si el peso actual ya supera el objetivo, marcar listo de inmediato
+            engorde.actualizar_estado()
+
+            return IniciarEngorde(
+                engorde=engorde, success=True,
+                message=f"Engorde iniciado para {animal.nro_arete}"
+            )
+        except Exception as e:
+            return IniciarEngorde(engorde=None, success=False, message=str(e))
+
+
+class CambiarEstadoEngorde(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        estado = graphene.String(required=True)
+
+    engorde = graphene.Field(EngordeAnimalType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, id, estado):
+        try:
+            estados_validos = dict(EngordeAnimal.ESTADO_CHOICES)
+            if estado not in estados_validos:
+                return CambiarEstadoEngorde(
+                    engorde=None, success=False,
+                    message="Estado de engorde no vÃ¡lido"
+                )
+
+            engorde = EngordeAnimal.objects.get(id=id)
+            engorde.estado = estado
+            engorde.save(update_fields=["estado"])
+
+            return CambiarEstadoEngorde(
+                engorde=engorde, success=True,
+                message=f"Engorde actualizado a {estados_validos[estado]}"
+            )
+        except Exception as e:
+            return CambiarEstadoEngorde(engorde=None, success=False, message=str(e))
+
+
+# ==========================================
+# MUTATION PRINCIPAL
+# ==========================================
+
+class Mutation(graphene.ObjectType):
+    crear_registro_peso = CrearRegistroPeso.Field()
+    crear_lactancia = CrearLactancia.Field()
+    secar_lactancia = SecarLactancia.Field()
+    crear_produccion_leche = CrearProduccionLeche.Field()
+    iniciar_engorde = IniciarEngorde.Field()
+    cambiar_estado_engorde = CambiarEstadoEngorde.Field()
+from django.shortcuts import render
+
+# Create your views here.

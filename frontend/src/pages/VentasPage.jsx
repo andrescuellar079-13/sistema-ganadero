@@ -7,6 +7,7 @@ import VentaForm from '../components/VentaForm'
 import PageHeader from '../components/ui/PageHeader'
 import PageAlert from '../components/ui/PageAlert'
 import EmptyState from '../components/ui/EmptyState'
+import AdvertenciaRetiro from '../components/AdvertenciaRetiro'
 
 // Librerías añadidas para exportar reportes descargables
 import * as XLSX from 'xlsx'
@@ -328,6 +329,8 @@ export default function VentasPage() {
         onAdd={() => { setEditingVenta(null); setShowForm(true) }}
         addLabel="Nueva Venta"
       />
+
+      <AdvertenciaRetiro />
 
       <PageAlert message={message} onClose={() => setMessage(null)} />
 

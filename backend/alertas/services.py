@@ -54,7 +54,14 @@ def _crear_si_no_existe(finca_id, *, tipo, mensaje, fecha_alerta, referencia_tip
 def generar_alertas_automaticas(finca_id):
     """Recorre los módulos y crea alertas faltantes. Devuelve conteos."""
     # Imports diferidos para evitar dependencias circulares entre apps.
-    from sanidad.models import Vacunacion
+    from sanidad.models import (
+        Vacunacion,
+        Desparasitacion,
+        Tratamiento,
+        RegistroMastitis,
+        ExamenLaboratorio,
+        TiempoRetiro,
+    )
     from reproduccion.models import Reproduccion
     from catalogos.models import Medicamento, Alimento
     from produccion.models import RegistroPeso, EngordeAnimal
@@ -65,6 +72,13 @@ def generar_alertas_automaticas(finca_id):
     conteos = {
         "vacunas_proximas": 0,
         "vacunas_vencidas": 0,
+        "desparasitaciones_proximas": 0,
+        "desparasitaciones_vencidas": 0,
+        "tratamientos_activos": 0,
+        "tiempos_retiro_activos": 0,
+        "mastitis_activas": 0,
+        "examenes_pendientes": 0,
+        "medicamentos_vencidos": 0,
         "partos_proximos": 0,
         "stock_bajo_medicamento": 0,
         "stock_bajo_alimento": 0,
@@ -115,6 +129,171 @@ def generar_alertas_automaticas(finca_id):
                 accion_recomendada="Programar la aplicación del refuerzo.",
             ):
                 conteos["vacunas_proximas"] += 1
+
+    # ---- Desparasitaciones próximas / vencidas (sanidad) ----
+    # El campo real de la próxima fecha en EventoSanitario es `proxima_fecha`.
+    desparasitaciones = (
+        Desparasitacion.objects
+        .filter(finca_id=finca_id, proxima_fecha__isnull=False)
+        .select_related("animal")
+    )
+    limite_despar = hoy + timedelta(days=15)
+    for d in desparasitaciones:
+        dias = (d.proxima_fecha - hoy).days
+        if d.proxima_fecha < hoy:
+            if _crear_si_no_existe(
+                finca_id,
+                tipo="DESPARASITACION_VENCIDA",
+                mensaje=f"Desparasitación vencida para {_label_animal(d.animal)} ({abs(dias)} días de atraso).",
+                fecha_alerta=hoy,
+                referencia_tipo="Desparasitacion",
+                referencia_id=d.id,
+                prioridad="ALTA",
+                modulo_origen="SANIDAD",
+                animal=d.animal,
+                dias_restantes=dias,
+                fecha_vencimiento=d.proxima_fecha,
+                accion_recomendada="Realizar la desparasitación lo antes posible.",
+            ):
+                conteos["desparasitaciones_vencidas"] += 1
+        elif d.proxima_fecha <= limite_despar:
+            if _crear_si_no_existe(
+                finca_id,
+                tipo="DESPARASITACION_PROXIMA",
+                mensaje=f"Desparasitación próxima para {_label_animal(d.animal)} en {dias} días.",
+                fecha_alerta=d.proxima_fecha,
+                referencia_tipo="Desparasitacion",
+                referencia_id=d.id,
+                prioridad="MEDIA",
+                modulo_origen="SANIDAD",
+                animal=d.animal,
+                dias_restantes=dias,
+                fecha_vencimiento=d.proxima_fecha,
+                accion_recomendada="Programar la desparasitación.",
+            ):
+                conteos["desparasitaciones_proximas"] += 1
+
+    # ---- Tratamientos activos (sanidad) ----
+    tratamientos = (
+        Tratamiento.objects
+        .filter(finca_id=finca_id, en_tratamiento=True)
+        .select_related("animal")
+    )
+    for t in tratamientos:
+        inicio = t.fecha_inicio or t.fecha
+        dias_activo = (hoy - inicio).days if inicio else 0
+        diagnostico = t.diagnostico or "tratamiento"
+        if _crear_si_no_existe(
+            finca_id,
+            tipo="TRATAMIENTO_ACTIVO",
+            mensaje=f"Tratamiento activo de {_label_animal(t.animal)}: {diagnostico} ({dias_activo} días).",
+            fecha_alerta=hoy,
+            referencia_tipo="Tratamiento",
+            referencia_id=t.id,
+            prioridad="MEDIA",
+            modulo_origen="SANIDAD",
+            animal=t.animal,
+            dias_restantes=-dias_activo,
+            accion_recomendada="Dar seguimiento y finalizar el tratamiento cuando corresponda.",
+        ):
+            conteos["tratamientos_activos"] += 1
+
+    # ---- Tiempos de retiro activos (sanidad): hoy dentro del período ----
+    retiros = (
+        TiempoRetiro.objects
+        .filter(
+            tratamiento__finca_id=finca_id,
+            activo=True,
+            fecha_inicio__lte=hoy,
+            fecha_fin__gte=hoy,
+        )
+        .select_related("animal")
+    )
+    for r in retiros:
+        dias = (r.fecha_fin - hoy).days
+        if _crear_si_no_existe(
+            finca_id,
+            tipo="TIEMPO_RETIRO_ACTIVO",
+            mensaje=(
+                f"{_label_animal(r.animal)} en tiempo de retiro "
+                f"({r.get_tipo_retiro_display()}) hasta el {r.fecha_fin:%d/%m/%Y}."
+            ),
+            fecha_alerta=hoy,
+            referencia_tipo="TiempoRetiro",
+            referencia_id=r.id,
+            prioridad="ALTA",
+            modulo_origen="SANIDAD",
+            animal=r.animal,
+            dias_restantes=dias,
+            fecha_vencimiento=r.fecha_fin,
+            accion_recomendada="No destinar el animal a venta ni su leche/carne a consumo hasta finalizar el retiro.",
+        ):
+            conteos["tiempos_retiro_activos"] += 1
+
+    # ---- Mastitis activas (sanidad): no curadas ----
+    mastitis = (
+        RegistroMastitis.objects
+        .filter(finca_id=finca_id, se_curo=False)
+        .select_related("animal")
+    )
+    for m in mastitis:
+        if _crear_si_no_existe(
+            finca_id,
+            tipo="MASTITIS_ACTIVA",
+            mensaje=(
+                f"Mastitis {m.get_tipo_display()} activa en {_label_animal(m.animal)} "
+                f"(cuarto {m.get_cuarto_afectado_display()})."
+            ),
+            fecha_alerta=hoy,
+            referencia_tipo="RegistroMastitis",
+            referencia_id=m.id,
+            prioridad="ALTA",
+            modulo_origen="SANIDAD",
+            animal=m.animal,
+            accion_recomendada="Tratar la mastitis y registrar la curación cuando corresponda.",
+        ):
+            conteos["mastitis_activas"] += 1
+
+    # ---- Exámenes de laboratorio pendientes de resultado (sanidad) ----
+    examenes = (
+        ExamenLaboratorio.objects
+        .filter(finca_id=finca_id, fecha_resultado__isnull=True)
+        .select_related("animal")
+    )
+    for ex in examenes:
+        if _crear_si_no_existe(
+            finca_id,
+            tipo="EXAMEN_PENDIENTE",
+            mensaje=(
+                f"Examen de {ex.get_tipo_examen_display()} pendiente de resultado "
+                f"para {_label_animal(ex.animal)} ({ex.laboratorio})."
+            ),
+            fecha_alerta=ex.fecha_toma,
+            referencia_tipo="ExamenLaboratorio",
+            referencia_id=ex.id,
+            prioridad="MEDIA",
+            modulo_origen="SANIDAD",
+            animal=ex.animal,
+            accion_recomendada="Registrar el resultado del examen al recibirlo.",
+        ):
+            conteos["examenes_pendientes"] += 1
+
+    # ---- Medicamentos vencidos (catalogos, contexto sanitario) ----
+    for med in Medicamento.objects.filter(finca_id=finca_id, activo=True):
+        if med.is_vencido():
+            if _crear_si_no_existe(
+                finca_id,
+                tipo="MEDICAMENTO_VENCIDO",
+                mensaje=f"Medicamento «{med.nombre}» vencido ({med.fecha_vencimiento:%d/%m/%Y}).",
+                fecha_alerta=hoy,
+                referencia_tipo="Medicamento",
+                referencia_id=med.id,
+                prioridad="ALTA",
+                modulo_origen="SANIDAD",
+                fecha_vencimiento=med.fecha_vencimiento,
+                accion_recomendada="Retirar el medicamento vencido del inventario.",
+            ):
+                conteos["medicamentos_vencidos"] += 1
 
     # ---- Partos próximos (reproduccion) ----
     reproducciones = (

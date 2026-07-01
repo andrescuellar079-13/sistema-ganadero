@@ -7,6 +7,7 @@ import DesparasitacionForm from '../components/DesparasitacionForm'
 import ExamenLaboratorioForm from '../components/ExamenLaboratorioForm'
 import MastitisForm from '../components/MastitisForm'
 import TiempoRetiroForm from '../components/TiempoRetiroForm'
+import AdvertenciaRetiro from '../components/AdvertenciaRetiro'
 
 import {
   Box, Paper, Table, TableHead, TableBody, TableRow, TableCell,
@@ -31,6 +32,10 @@ import AssessmentIcon from '@mui/icons-material/Assessment'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import TableChartIcon from '@mui/icons-material/TableChart'
 import CloseIcon from '@mui/icons-material/Close'
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined'
+import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined'
 
 const KPI = ({ label, value, sub, accent }) => (
   <Card elevation={0} sx={{ border: '1px solid #E2E8F0', borderLeft: `4px solid ${accent}`, borderRadius: 2 }}>
@@ -434,7 +439,25 @@ const TABS = [
   { label: '+ Mastitis', Icon: LocalHospitalOutlinedIcon },
   { label: '+ Tiempo Retiro', Icon: TimerOutlinedIcon },
   { label: 'Reportes', Icon: AssessmentIcon },
+  { label: 'Calendario', Icon: CalendarMonthOutlinedIcon },
 ]
+
+const TAB_CALENDARIO = 14
+
+// Colores de prioridad y estado para el calendario sanitario
+const PRIORIDAD_SX = {
+  CRITICA: { bgcolor: '#FEE2E2', color: '#991B1B', fontWeight: 600 },
+  ALTA: { bgcolor: '#FFE0B2', color: '#E65100', fontWeight: 600 },
+  MEDIA: { bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 500 },
+  BAJA: { bgcolor: '#E2E8F0', color: '#475569', fontWeight: 500 },
+}
+const estadoSx = (estado) => {
+  if (['Vencida', 'Activa'].includes(estado)) return { bgcolor: '#FEE2E2', color: '#991B1B' }
+  if (estado === 'Próxima') return { bgcolor: '#FEF3C7', color: '#92400E' }
+  if (estado === 'Activo') return { bgcolor: '#E0F2FE', color: '#075985' }
+  return { bgcolor: '#EDE9FE', color: '#5B21B6' }
+}
+const hoyISO = () => new Date().toISOString().slice(0, 10)
 
 export default function SanidadPage() {
   const {
@@ -446,10 +469,74 @@ export default function SanidadPage() {
     examenesLaboratorio,
     registrosMastitis,
     animalesEnRetiro,
+    resumenSanidad,
+    calendarioSanitario,
+    finalizarTratamiento,
+    crearTiempoRetiro,
+    crearObservacion,
+    refetchResumen,
+    refetchCalendario,
     loading
   } = useSanidad()
 
   const [tabIdx, setTabIdx] = useState(0)
+
+  // ==========================================
+  // Acciones sobre Tratamientos Activos
+  // ==========================================
+  const [detalleTratamiento, setDetalleTratamiento] = useState(null)
+  const [retiroTratamiento, setRetiroTratamiento] = useState(null)
+  const [seguimientoTratamiento, setSeguimientoTratamiento] = useState(null)
+  const [retiroForm, setRetiroForm] = useState({ tipoRetiro: 'LECHE', diasRetiro: 3, fechaInicio: hoyISO() })
+  const [seguimientoTexto, setSeguimientoTexto] = useState('')
+  const [accionMsg, setAccionMsg] = useState(null)
+  const [calPrioridad, setCalPrioridad] = useState('todos')
+
+  const refrescarDashboard = () => { refetchResumen?.(); refetchCalendario?.() }
+
+  const handleFinalizar = async (t) => {
+    if (!window.confirm(`¿Finalizar el tratamiento de ${t.animal?.nroArete}?`)) return
+    const res = await finalizarTratamiento(t.id, hoyISO())
+    setAccionMsg(res?.success
+      ? { type: 'success', text: 'Tratamiento finalizado.' }
+      : { type: 'error', text: res?.error || 'No se pudo finalizar.' })
+    refrescarDashboard()
+  }
+
+  const abrirRetiro = (t) => {
+    setRetiroForm({ tipoRetiro: 'LECHE', diasRetiro: 3, fechaInicio: hoyISO() })
+    setRetiroTratamiento(t)
+  }
+  const guardarRetiro = async () => {
+    const res = await crearTiempoRetiro({
+      tratamientoId: retiroTratamiento.id,
+      tipoRetiro: retiroForm.tipoRetiro,
+      fechaInicio: retiroForm.fechaInicio,
+      diasRetiro: parseInt(retiroForm.diasRetiro, 10) || 0,
+    })
+    setAccionMsg(res?.success
+      ? { type: 'success', text: 'Tiempo de retiro registrado.' }
+      : { type: 'error', text: res?.error || 'No se pudo registrar el retiro.' })
+    setRetiroTratamiento(null)
+    refrescarDashboard()
+  }
+
+  const abrirSeguimiento = (t) => {
+    setSeguimientoTexto('')
+    setSeguimientoTratamiento(t)
+  }
+  const guardarSeguimiento = async () => {
+    if (!seguimientoTexto.trim()) return
+    const res = await crearObservacion({
+      animalId: seguimientoTratamiento.animal.id,
+      fecha: hoyISO(),
+      descripcion: seguimientoTexto.trim(),
+    })
+    setAccionMsg(res?.success
+      ? { type: 'success', text: 'Seguimiento registrado como observación.' }
+      : { type: 'error', text: res?.error || 'No se pudo registrar el seguimiento.' })
+    setSeguimientoTratamiento(null)
+  }
 
   // Estados para filtros generales
   const [searchTerm, setSearchTerm] = useState('')
@@ -710,23 +797,25 @@ export default function SanidadPage() {
         <Typography variant="body2" color="text.secondary">Tratamientos, desparasitaciones, diagnósticos, exámenes y registros sanitarios</Typography>
       </Box>
 
-      {/* KPIs */}
+      {/* Advertencia global de animales en tiempo de retiro */}
+      <AdvertenciaRetiro />
+
+      {/* KPIs del dashboard sanitario (datos reales en tiempo real) */}
       <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <KPI label="Tratamientos activos" value={tratamientosActivos.length} accent="#E65100" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <KPI label="Desparasitaciones" value={desparasitacionesFiltradas.length} accent="#2E7D32" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <KPI label="Diagnósticos" value={diagnosticosFiltrados.length} accent="#6A1B9A" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <KPI label="Exámenes Lab" value={examenesFiltrados?.length || 0} accent="#1565C0" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <KPI label="Animales en retiro" value={animalesEnRetiro?.length || 0} accent="#C62828" />
-        </Grid>
+        {[
+          { label: 'Tratamientos activos', value: resumenSanidad?.tratamientosActivos ?? tratamientosActivos.length, accent: '#E65100' },
+          { label: 'Vacunas próximas', value: resumenSanidad?.vacunasProximas ?? 0, accent: '#1565C0' },
+          { label: 'Vacunas vencidas', value: resumenSanidad?.vacunasVencidas ?? 0, accent: '#C62828' },
+          { label: 'Desparasit. próximas', value: resumenSanidad?.desparasitacionesProximas ?? 0, accent: '#2E7D32' },
+          { label: 'Desparasit. vencidas', value: resumenSanidad?.desparasitacionesVencidas ?? 0, accent: '#C62828' },
+          { label: 'Mastitis activas', value: resumenSanidad?.mastitisActivas ?? 0, accent: '#AD1457' },
+          { label: 'Exámenes pendientes', value: resumenSanidad?.examenesPendientes ?? 0, accent: '#6A1B9A' },
+          { label: 'Animales en retiro', value: resumenSanidad?.animalesEnRetiro ?? (animalesEnRetiro?.length || 0), accent: '#B71C1C' },
+        ].map((k) => (
+          <Grid item xs={6} sm={4} md={3} lg={1.5} key={k.label}>
+            <KPI label={k.label} value={k.value} accent={k.accent} />
+          </Grid>
+        ))}
       </Grid>
 
       {/* Barra de búsqueda y filtros */}
@@ -939,55 +1028,115 @@ export default function SanidadPage() {
 
       {/* Dashboard */}
       {tabIdx === 0 && (
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
-              <Box sx={{ bgcolor: '#E65100', color: '#fff', px: 2, py: 1.5 }}>
-                <Typography variant="subtitle2" fontWeight={700}>Tratamientos Activos</Typography>
-              </Box>
-              <Box sx={{ p: 2 }}>
-                {tratamientosActivos.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>No hay tratamientos activos</Typography>
-                ) : (
-                  tratamientosActivos.map(t => (
-                    <Box key={t.id} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, p: 1.5, mb: 1, display: 'flex', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="body2" fontWeight={700}>{t.animal?.nroArete}</Typography>
-                        <Typography variant="caption" color="text.secondary">{t.diagnostico?.substring(0, 50)}…</Typography>
-                      </Box>
-                      <Box textAlign="right">
-                        <Typography variant="caption" color="text.secondary">{new Date(t.fecha).toLocaleDateString('es-PY')}</Typography>
-                        <Chip size="small" label="Activo" sx={{ display: 'block', mt: 0.5, bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 500 }} />
-                      </Box>
-                    </Box>
-                  ))
-                )}
-              </Box>
+        <Stack spacing={2}>
+          {accionMsg && (
+            <Paper elevation={0} sx={{ p: 1.5, borderRadius: 2,
+              border: `1px solid ${accionMsg.type === 'success' ? '#86EFAC' : '#FCA5A5'}`,
+              bgcolor: accionMsg.type === 'success' ? '#F0FDF4' : '#FEF2F2' }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="body2" sx={{ color: accionMsg.type === 'success' ? '#166534' : '#991B1B' }}>
+                  {accionMsg.text}
+                </Typography>
+                <IconButton size="small" onClick={() => setAccionMsg(null)}><CloseIcon fontSize="small" /></IconButton>
+              </Stack>
             </Paper>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
-              <Box sx={{ bgcolor: '#6A1B9A', color: '#fff', px: 2, py: 1.5 }}>
-                <Typography variant="subtitle2" fontWeight={700}>Últimos Diagnósticos</Typography>
-              </Box>
-              <Box sx={{ p: 2 }}>
-                {diagnosticosFiltrados.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>No hay diagnósticos</Typography>
-                ) : (
-                  diagnosticosFiltrados.slice(0, 5).map(d => (
-                    <Box key={d.id} sx={{ borderBottom: '1px solid #F1F5F9', pb: 1, mb: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" fontWeight={600}>{d.animal?.nroArete}</Typography>
-                        <Typography variant="caption" color="text.secondary">{new Date(d.fecha).toLocaleDateString('es-PY')}</Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">{d.descripcion?.substring(0, 80)}…</Typography>
+          )}
+
+          {/* Tratamientos Activos (operativo) */}
+          <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ bgcolor: '#E65100', color: '#fff', px: 2, py: 1.5 }}>
+              <Typography variant="subtitle2" fontWeight={700}>Tratamientos Activos</Typography>
+            </Box>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Animal</TableCell>
+                    <TableCell>Diagnóstico</TableCell>
+                    <TableCell>Medicamento</TableCell>
+                    <TableCell>Fecha inicio</TableCell>
+                    <TableCell align="center">Días activo</TableCell>
+                    <TableCell align="right">Costo</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell align="center">Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tratamientosActivos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        No hay tratamientos activos
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    tratamientosActivos.map(t => (
+                      <TableRow key={t.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>{t.animal?.nroArete}</Typography>
+                          <Typography variant="caption" color="text.secondary">{t.animal?.nombre}</Typography>
+                        </TableCell>
+                        <TableCell>{t.diagnostico || '—'}</TableCell>
+                        <TableCell>{t.nombreMedicamento || t.medicamento?.nombre || '—'}</TableCell>
+                        <TableCell>{fmt(t.fechaInicio || t.fecha)}</TableCell>
+                        <TableCell align="center">{t.diasActivo ?? '—'}</TableCell>
+                        <TableCell align="right">Bs {Number(t.costoTotal || 0).toLocaleString('es-PY')}</TableCell>
+                        <TableCell>
+                          <Chip size="small" label="Activo" sx={{ bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 500 }} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <Tooltip title="Ver detalle">
+                              <IconButton size="small" onClick={() => setDetalleTratamiento(t)}>
+                                <VisibilityOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Finalizar tratamiento">
+                              <IconButton size="small" color="success" onClick={() => handleFinalizar(t)}>
+                                <TaskAltOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Crear tiempo de retiro">
+                              <IconButton size="small" color="error" onClick={() => abrirRetiro(t)}>
+                                <TimerOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Registrar seguimiento">
+                              <IconButton size="small" color="primary" onClick={() => abrirSeguimiento(t)}>
+                                <NoteAddOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+          </Paper>
+
+          {/* Últimos Diagnósticos */}
+          <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ bgcolor: '#6A1B9A', color: '#fff', px: 2, py: 1.5 }}>
+              <Typography variant="subtitle2" fontWeight={700}>Últimos Diagnósticos</Typography>
+            </Box>
+            <Box sx={{ p: 2 }}>
+              {diagnosticosFiltrados.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>No hay diagnósticos</Typography>
+              ) : (
+                diagnosticosFiltrados.slice(0, 5).map(d => (
+                  <Box key={d.id} sx={{ borderBottom: '1px solid #F1F5F9', pb: 1, mb: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" fontWeight={600}>{d.animal?.nroArete}</Typography>
+                      <Typography variant="caption" color="text.secondary">{fmt(d.fecha)}</Typography>
                     </Box>
-                  ))
-                )}
-              </Box>
-            </Paper>
-          </Grid>
-        </Grid>
+                    <Typography variant="caption" color="text.secondary">{d.descripcion?.substring(0, 80)}…</Typography>
+                  </Box>
+                ))
+              )}
+            </Box>
+          </Paper>
+        </Stack>
       )}
 
       {/* Tratamientos con filtros */}
@@ -1291,7 +1440,7 @@ export default function SanidadPage() {
       
       {/* Reportes */}
       {tabIdx === 13 && (
-        <ReportesSanidad 
+        <ReportesSanidad
           tratamientos={tratamientos}
           desparasitaciones={desparasitaciones}
           diagnosticos={diagnosticos}
@@ -1301,6 +1450,157 @@ export default function SanidadPage() {
           animalesEnRetiro={animalesEnRetiro}
         />
       )}
+
+      {/* Calendario Sanitario */}
+      {tabIdx === TAB_CALENDARIO && (
+        <Paper elevation={0} sx={{ border: '1px solid #E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+          <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, borderBottom: '1px solid #E2E8F0' }}>
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700}>Calendario Sanitario</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Eventos preventivos y operativos (próximos 30 días y pendientes)
+              </Typography>
+            </Box>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Prioridad</InputLabel>
+              <Select value={calPrioridad} onChange={(e) => setCalPrioridad(e.target.value)} label="Prioridad">
+                <MenuItem value="todos">Todas</MenuItem>
+                <MenuItem value="CRITICA">Crítica</MenuItem>
+                <MenuItem value="ALTA">Alta</MenuItem>
+                <MenuItem value="MEDIA">Media</MenuItem>
+                <MenuItem value="BAJA">Baja</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Fecha</TableCell>
+                  <TableCell>Animal</TableCell>
+                  <TableCell>Tipo de evento</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell>Prioridad</TableCell>
+                  <TableCell>Acción recomendada</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(() => {
+                  const eventos = (calendarioSanitario || []).filter(
+                    (e) => calPrioridad === 'todos' || e.prioridad === calPrioridad
+                  )
+                  if (eventos.length === 0) {
+                    return (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                          No hay eventos sanitarios en el período
+                        </TableCell>
+                      </TableRow>
+                    )
+                  }
+                  return eventos.map((e, i) => (
+                    <TableRow key={`${e.referenciaTipo}-${e.referenciaId}-${i}`} hover>
+                      <TableCell>{fmt(e.fecha)}</TableCell>
+                      <TableCell><Typography variant="body2" fontWeight={600}>{e.animal || '—'}</Typography></TableCell>
+                      <TableCell>{e.tipoEvento}</TableCell>
+                      <TableCell><Chip size="small" label={e.estado} sx={estadoSx(e.estado)} /></TableCell>
+                      <TableCell><Chip size="small" label={e.prioridad} sx={PRIORIDAD_SX[e.prioridad] || PRIORIDAD_SX.BAJA} /></TableCell>
+                      <TableCell><Typography variant="caption" color="text.secondary">{e.accionRecomendada}</Typography></TableCell>
+                    </TableRow>
+                  ))
+                })()}
+              </TableBody>
+            </Table>
+          </Box>
+        </Paper>
+      )}
+
+      {/* ===== Diálogo: detalle de tratamiento ===== */}
+      <Dialog open={!!detalleTratamiento} onClose={() => setDetalleTratamiento(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Detalle del tratamiento</DialogTitle>
+        <DialogContent dividers>
+          {detalleTratamiento && (
+            <Stack spacing={1.2}>
+              <DetalleRow label="Animal" value={`${detalleTratamiento.animal?.nroArete || ''} ${detalleTratamiento.animal?.nombre ? '· ' + detalleTratamiento.animal.nombre : ''}`} />
+              <DetalleRow label="Diagnóstico" value={detalleTratamiento.diagnostico || '—'} />
+              <DetalleRow label="Medicamento" value={detalleTratamiento.nombreMedicamento || detalleTratamiento.medicamento?.nombre || '—'} />
+              <DetalleRow label="Fecha inicio" value={fmt(detalleTratamiento.fechaInicio || detalleTratamiento.fecha)} />
+              <DetalleRow label="Días activo" value={`${detalleTratamiento.diasActivo ?? '—'} días`} />
+              <DetalleRow label="Costo" value={`Bs ${Number(detalleTratamiento.costoTotal || 0).toLocaleString('es-PY')}`} />
+              <DetalleRow label="Observaciones" value={detalleTratamiento.observaciones || '—'} />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetalleTratamiento(null)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ===== Diálogo: crear tiempo de retiro ===== */}
+      <Dialog open={!!retiroTratamiento} onClose={() => setRetiroTratamiento(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Crear tiempo de retiro</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {retiroTratamiento?.animal?.nroArete} · {retiroTratamiento?.diagnostico || 'Tratamiento'}
+          </Typography>
+          <Stack spacing={2}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Tipo de retiro</InputLabel>
+              <Select
+                value={retiroForm.tipoRetiro}
+                onChange={(e) => setRetiroForm({ ...retiroForm, tipoRetiro: e.target.value })}
+                label="Tipo de retiro"
+              >
+                <MenuItem value="LECHE">Retiro de leche</MenuItem>
+                <MenuItem value="CARNE">Retiro de carne</MenuItem>
+                <MenuItem value="AMBOS">Carne y leche</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Fecha de inicio" type="date" size="small" fullWidth
+              value={retiroForm.fechaInicio}
+              onChange={(e) => setRetiroForm({ ...retiroForm, fechaInicio: e.target.value })}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              label="Días de retiro" type="number" size="small" fullWidth
+              value={retiroForm.diasRetiro}
+              onChange={(e) => setRetiroForm({ ...retiroForm, diasRetiro: e.target.value })}
+              slotProps={{ htmlInput: { min: 1 } }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRetiroTratamiento(null)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={guardarRetiro}>Registrar retiro</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ===== Diálogo: registrar seguimiento (observación) ===== */}
+      <Dialog open={!!seguimientoTratamiento} onClose={() => setSeguimientoTratamiento(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Registrar seguimiento</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Se guardará como observación sanitaria de {seguimientoTratamiento?.animal?.nroArete}.
+          </Typography>
+          <TextField
+            label="Seguimiento / evolución" multiline minRows={3} fullWidth autoFocus
+            value={seguimientoTexto}
+            onChange={(e) => setSeguimientoTexto(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSeguimientoTratamiento(null)}>Cancelar</Button>
+          <Button variant="contained" disabled={!seguimientoTexto.trim()} onClick={guardarSeguimiento}>Guardar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
+
+const DetalleRow = ({ label, value }) => (
+  <Box sx={{ display: 'flex', gap: 1 }}>
+    <Typography variant="body2" sx={{ minWidth: 120, color: 'text.secondary' }}>{label}</Typography>
+    <Typography variant="body2" fontWeight={500}>{value}</Typography>
+  </Box>
+)

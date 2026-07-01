@@ -7,6 +7,7 @@ import ProduccionLecheForm  from '../components/ProduccionLecheForm'
 import RegistroPesoForm     from '../components/RegistroPesoForm'
 import IniciarEngordeDialog from '../components/IniciarEngordeDialog'
 import ReportModalReusable  from '../components/ReportModalReusable'
+import AdvertenciaRetiro     from '../components/AdvertenciaRetiro'
 import { buildProduccionReportConfigs } from '../components/reportes/produccionReportConfig'
 
 import {
@@ -396,6 +397,7 @@ export default function ProduccionPage() {
 
   return (
     <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+      <AdvertenciaRetiro />
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
         <Box>
           <Typography variant="h5" fontWeight={700}>Módulo de Producción Ganadera</Typography>
