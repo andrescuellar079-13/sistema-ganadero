@@ -48,11 +48,53 @@ export const GET_TRATAMIENTOS_ACTIVOS = gql`
       fechaInicio
       diagnostico
       enTratamiento
+      diasActivo
+      costoTotal
+      nombreMedicamento
       animal {
         id
         nroArete
         nombre
       }
+      medicamento {
+        id
+        nombre
+      }
+    }
+  }
+`
+
+// ==========================================
+// DASHBOARD INTERNO Y CALENDARIO SANITARIO
+// ==========================================
+
+export const GET_RESUMEN_SANIDAD = gql`
+  query GetResumenSanidad($fincaId: ID!) {
+    resumenSanidad(fincaId: $fincaId) {
+      tratamientosActivos
+      vacunasProximas
+      vacunasVencidas
+      desparasitacionesProximas
+      desparasitacionesVencidas
+      mastitisActivas
+      examenesPendientes
+      animalesEnRetiro
+    }
+  }
+`
+
+export const GET_CALENDARIO_SANITARIO = gql`
+  query GetCalendarioSanitario($fincaId: ID!, $dias: Int) {
+    calendarioSanitario(fincaId: $fincaId, dias: $dias) {
+      referenciaTipo
+      referenciaId
+      fecha
+      animalId
+      animal
+      tipoEvento
+      estado
+      prioridad
+      accionRecomendada
     }
   }
 `

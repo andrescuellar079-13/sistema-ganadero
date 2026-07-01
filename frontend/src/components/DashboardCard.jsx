@@ -2,9 +2,23 @@ import { Card, CardContent, Box, Typography } from '@mui/material'
 import TrendingUpIcon   from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 
-export default function DashboardCard({ title, value, icon: IconComp, accent = '#2E7D32', trend }) {
+export default function DashboardCard({ title, value, icon: IconComp, accent = '#2E7D32', trend, subtitle, onClick, highlight = false }) {
+  const clickable = typeof onClick === 'function'
   return (
-    <Card elevation={0} sx={{ borderLeft: `4px solid ${accent}` }}>
+    <Card
+      elevation={0}
+      onClick={onClick}
+      sx={{
+        borderLeft: `4px solid ${accent}`,
+        height: '100%',
+        transition: 'box-shadow .15s, transform .15s',
+        ...(highlight && { bgcolor: accent + '0A' }),
+        ...(clickable && {
+          cursor: 'pointer',
+          '&:hover': { boxShadow: 3, transform: 'translateY(-2px)' },
+        }),
+      }}
+    >
       <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Box>
@@ -14,6 +28,11 @@ export default function DashboardCard({ title, value, icon: IconComp, accent = '
             <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.1 }}>
               {value ?? '—'}
             </Typography>
+            {subtitle != null && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                {subtitle}
+              </Typography>
+            )}
             {trend != null && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
                 {trend > 0

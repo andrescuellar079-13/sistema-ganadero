@@ -160,22 +160,35 @@ class TratamientoType(DjangoObjectType):
     fechaFin = graphene.Date()
     costoTotal = graphene.Decimal()
     enTratamiento = graphene.Boolean()
-    
+    diasActivo = graphene.Int()
+    nombreMedicamento = graphene.String()
+
     class Meta:
         model = Tratamiento
         fields = "__all__"
-    
+
     def resolve_fechaInicio(self, info):
         return self.fecha_inicio
-    
+
     def resolve_fechaFin(self, info):
         return self.fecha_fin
-    
+
     def resolve_costoTotal(self, info):
         return self.costo_total
-    
+
     def resolve_enTratamiento(self, info):
         return self.en_tratamiento
+
+    def resolve_diasActivo(self, info):
+        """Días transcurridos desde el inicio. Si ya finalizó, hasta fecha_fin."""
+        inicio = self.fecha_inicio or self.fecha
+        if not inicio:
+            return None
+        fin = self.fecha_fin or date.today()
+        return max((fin - inicio).days, 0)
+
+    def resolve_nombreMedicamento(self, info):
+        return self.medicamento.nombre if self.medicamento else None
 
 
 class DesparasitacionType(DjangoObjectType):
@@ -192,9 +205,10 @@ class DesparasitacionType(DjangoObjectType):
     
     def resolve_pesoAplicacion(self, info):
         return self.peso_aplicacion
-    
+
     def resolve_fechaProxima(self, info):
-        return self.fecha_proxima
+        # El campo real de EventoSanitario es `proxima_fecha`.
+        return self.proxima_fecha
 
 
 class TratamientoMedicamentoType(DjangoObjectType):
@@ -336,6 +350,41 @@ class TiempoRetiroType(DjangoObjectType):
 
 
 # ==========================================
+# TYPES VIRTUALES (Dashboard / Calendario)
+# ==========================================
+
+class ResumenSanidadType(graphene.ObjectType):
+    """KPIs del dashboard interno de Sanidad, calculados en tiempo real."""
+    tratamientos_activos = graphene.Int()
+    vacunas_proximas = graphene.Int()
+    vacunas_vencidas = graphene.Int()
+    desparasitaciones_proximas = graphene.Int()
+    desparasitaciones_vencidas = graphene.Int()
+    mastitis_activas = graphene.Int()
+    examenes_pendientes = graphene.Int()
+    animales_en_retiro = graphene.Int()
+
+
+class CalendarioSanitarioEventoType(graphene.ObjectType):
+    """Evento del calendario sanitario (vista calculada, no se persiste)."""
+    referencia_tipo = graphene.String()
+    referencia_id = graphene.ID()
+    fecha = graphene.Date()
+    animal_id = graphene.ID()
+    animal = graphene.String()
+    tipo_evento = graphene.String()
+    estado = graphene.String()
+    prioridad = graphene.String()
+    accion_recomendada = graphene.String()
+
+
+def _label_animal(animal):
+    if not animal:
+        return ""
+    return f"{animal.nro_arete} - {animal.nombre or 'Sin nombre'}"
+
+
+# ==========================================
 # QUERY COMPLETA
 # ==========================================
 
@@ -367,6 +416,14 @@ class Query(graphene.ObjectType):
     registros_mastitis = graphene.List(RegistroMastitisType, finca_id=graphene.ID(required=True), animal_id=graphene.ID())
     tiempos_retiro = graphene.List(TiempoRetiroType, finca_id=graphene.ID(required=True), animal_id=graphene.ID(), activos=graphene.Boolean())
     animales_en_retiro = graphene.List(TiempoRetiroType, finca_id=graphene.ID(required=True))
+
+    # Dashboard interno y calendario sanitario (calculados en tiempo real)
+    resumen_sanidad = graphene.Field(ResumenSanidadType, finca_id=graphene.ID(required=True))
+    calendario_sanitario = graphene.List(
+        CalendarioSanitarioEventoType,
+        finca_id=graphene.ID(required=True),
+        dias=graphene.Int(default_value=30),
+    )
     
     def resolve_vacunaciones(self, info, finca_id, animal_id=None, vacuna_id=None,
                              veterinario_id=None, campana=None,
@@ -475,6 +532,146 @@ class Query(graphene.ObjectType):
             fecha_inicio__lte=hoy,
             fecha_fin__gte=hoy
         )
+
+    def resolve_resumen_sanidad(self, info, finca_id):
+        hoy = date.today()
+        limite = hoy + timedelta(days=30)
+        return ResumenSanidadType(
+            tratamientos_activos=Tratamiento.objects.filter(
+                finca_id=finca_id, en_tratamiento=True
+            ).count(),
+            vacunas_proximas=Vacunacion.objects.filter(
+                finca_id=finca_id, fecha_proxima__gte=hoy, fecha_proxima__lte=limite
+            ).count(),
+            vacunas_vencidas=Vacunacion.objects.filter(
+                finca_id=finca_id, fecha_proxima__lt=hoy
+            ).count(),
+            desparasitaciones_proximas=Desparasitacion.objects.filter(
+                finca_id=finca_id, proxima_fecha__gte=hoy, proxima_fecha__lte=limite
+            ).count(),
+            desparasitaciones_vencidas=Desparasitacion.objects.filter(
+                finca_id=finca_id, proxima_fecha__lt=hoy
+            ).count(),
+            mastitis_activas=RegistroMastitis.objects.filter(
+                finca_id=finca_id, se_curo=False
+            ).count(),
+            examenes_pendientes=ExamenLaboratorio.objects.filter(
+                finca_id=finca_id, fecha_resultado__isnull=True
+            ).count(),
+            animales_en_retiro=TiempoRetiro.objects.filter(
+                tratamiento__finca_id=finca_id, activo=True,
+                fecha_inicio__lte=hoy, fecha_fin__gte=hoy,
+            ).count(),
+        )
+
+    def resolve_calendario_sanitario(self, info, finca_id, dias=30):
+        hoy = date.today()
+        limite = hoy + timedelta(days=dias)
+        eventos = []
+
+        def _agregar(*, referencia_tipo, referencia_id, fecha, animal,
+                     tipo_evento, estado, prioridad, accion):
+            eventos.append(CalendarioSanitarioEventoType(
+                referencia_tipo=referencia_tipo,
+                referencia_id=referencia_id,
+                fecha=fecha,
+                animal_id=animal.id if animal else None,
+                animal=_label_animal(animal),
+                tipo_evento=tipo_evento,
+                estado=estado,
+                prioridad=prioridad,
+                accion_recomendada=accion,
+            ))
+
+        # --- Vacunas (próximas dentro de la ventana o vencidas) ---
+        vacunas = Vacunacion.objects.filter(
+            finca_id=finca_id, fecha_proxima__isnull=False, fecha_proxima__lte=limite,
+        ).select_related("animal", "vacuna")
+        for v in vacunas:
+            dias_rest = (v.fecha_proxima - hoy).days
+            vencida = v.fecha_proxima < hoy
+            _agregar(
+                referencia_tipo="Vacunacion", referencia_id=v.id,
+                fecha=v.fecha_proxima, animal=v.animal,
+                tipo_evento=f"Vacuna: {v.vacuna.nombre}" if v.vacuna else "Vacuna",
+                estado="Vencida" if vencida else "Próxima",
+                prioridad=_prioridad_por_dias(dias_rest),
+                accion="Aplicar el refuerzo de la vacuna." if vencida
+                else "Programar la aplicación del refuerzo.",
+            )
+
+        # --- Desparasitaciones ---
+        despars = Desparasitacion.objects.filter(
+            finca_id=finca_id, proxima_fecha__isnull=False, proxima_fecha__lte=limite,
+        ).select_related("animal")
+        for d in despars:
+            dias_rest = (d.proxima_fecha - hoy).days
+            vencida = d.proxima_fecha < hoy
+            _agregar(
+                referencia_tipo="Desparasitacion", referencia_id=d.id,
+                fecha=d.proxima_fecha, animal=d.animal,
+                tipo_evento="Desparasitación",
+                estado="Vencida" if vencida else "Próxima",
+                prioridad=_prioridad_por_dias(dias_rest),
+                accion="Realizar la desparasitación lo antes posible." if vencida
+                else "Programar la desparasitación.",
+            )
+
+        # --- Tratamientos activos ---
+        tratamientos = Tratamiento.objects.filter(
+            finca_id=finca_id, en_tratamiento=True,
+        ).select_related("animal")
+        for t in tratamientos:
+            _agregar(
+                referencia_tipo="Tratamiento", referencia_id=t.id,
+                fecha=t.fecha_inicio or t.fecha, animal=t.animal,
+                tipo_evento=f"Tratamiento: {t.diagnostico}" if t.diagnostico else "Tratamiento",
+                estado="Activo", prioridad="MEDIA",
+                accion="Dar seguimiento y finalizar cuando corresponda.",
+            )
+
+        # --- Tiempos de retiro activos ---
+        retiros = TiempoRetiro.objects.filter(
+            tratamiento__finca_id=finca_id, activo=True,
+            fecha_inicio__lte=hoy, fecha_fin__gte=hoy,
+        ).select_related("animal")
+        for r in retiros:
+            _agregar(
+                referencia_tipo="TiempoRetiro", referencia_id=r.id,
+                fecha=r.fecha_fin, animal=r.animal,
+                tipo_evento=f"Tiempo de retiro ({r.get_tipo_retiro_display()})",
+                estado="Activo", prioridad="ALTA",
+                accion="No destinar a venta ni leche/carne a consumo hasta finalizar el retiro.",
+            )
+
+        # --- Mastitis activas ---
+        mastitis = RegistroMastitis.objects.filter(
+            finca_id=finca_id, se_curo=False,
+        ).select_related("animal")
+        for m in mastitis:
+            _agregar(
+                referencia_tipo="RegistroMastitis", referencia_id=m.id,
+                fecha=m.fecha, animal=m.animal,
+                tipo_evento=f"Mastitis {m.get_tipo_display()}",
+                estado="Activa", prioridad="ALTA",
+                accion="Tratar la mastitis y registrar la curación.",
+            )
+
+        # --- Exámenes pendientes de resultado ---
+        examenes = ExamenLaboratorio.objects.filter(
+            finca_id=finca_id, fecha_resultado__isnull=True,
+        ).select_related("animal")
+        for ex in examenes:
+            _agregar(
+                referencia_tipo="ExamenLaboratorio", referencia_id=ex.id,
+                fecha=ex.fecha_toma, animal=ex.animal,
+                tipo_evento=f"Examen: {ex.get_tipo_examen_display()}",
+                estado="Pendiente", prioridad="MEDIA",
+                accion="Registrar el resultado del examen al recibirlo.",
+            )
+
+        eventos.sort(key=lambda e: e.fecha or hoy)
+        return eventos
 
 
 # ==========================================
@@ -717,7 +914,7 @@ class CrearDesparasitacion(graphene.Mutation):
                 dosis=dosis,
                 peso_aplicacion=kwargs.get('peso_aplicacion', 0),
                 lote=kwargs.get('lote', ''),
-                fecha_proxima=kwargs.get('fecha_proxima'),
+                proxima_fecha=kwargs.get('fecha_proxima'),
                 observaciones=kwargs.get('observaciones', ''),
                 veterinario=veterinario
             )
@@ -1184,6 +1381,9 @@ class ActualizarDesparasitacion(graphene.Mutation):
     def mutate(self, info, id, **kwargs):
         try:
             desparasitacion = Desparasitacion.objects.get(id=id)
+            # `fecha_proxima` es el nombre del argumento; el campo real es `proxima_fecha`.
+            if kwargs.get('fecha_proxima') is not None:
+                desparasitacion.proxima_fecha = kwargs['fecha_proxima']
             if kwargs.get('tipo_parasiticida') is not None:
                 desparasitacion.tipo_parasiticida = kwargs['tipo_parasiticida']
             if kwargs.get('producto') is not None:
@@ -1194,8 +1394,6 @@ class ActualizarDesparasitacion(graphene.Mutation):
                 desparasitacion.peso_aplicacion = kwargs['peso_aplicacion']
             if kwargs.get('lote') is not None:
                 desparasitacion.lote = kwargs['lote']
-            if kwargs.get('fecha_proxima') is not None:
-                desparasitacion.fecha_proxima = kwargs['fecha_proxima']
             if kwargs.get('observaciones') is not None:
                 desparasitacion.observaciones = kwargs['observaciones']
             desparasitacion.save()

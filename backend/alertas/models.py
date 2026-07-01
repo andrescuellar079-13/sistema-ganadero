@@ -101,6 +101,14 @@ class Alerta(models.Model):
     TIPO_ALERTA_CHOICES = [
         ("VACUNA_PROXIMA", "Vacuna próxima"),
         ("VACUNA_VENCIDA", "Vacuna vencida"),
+        # --- Sanidad (preventivo/operativo) ---
+        ("DESPARASITACION_PROXIMA", "Desparasitación próxima"),
+        ("DESPARASITACION_VENCIDA", "Desparasitación vencida"),
+        ("TRATAMIENTO_ACTIVO", "Tratamiento activo"),
+        ("TIEMPO_RETIRO_ACTIVO", "Tiempo de retiro activo"),
+        ("MASTITIS_ACTIVA", "Mastitis activa"),
+        ("EXAMEN_PENDIENTE", "Examen de laboratorio pendiente"),
+        ("MEDICAMENTO_VENCIDO", "Medicamento vencido"),
         ("PARTO_PROXIMO", "Parto próximo"),
         ("STOCK_BAJO_MEDICAMENTO", "Stock bajo de medicamento"),
         ("STOCK_BAJO_ALIMENTO", "Stock bajo de alimento"),

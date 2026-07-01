@@ -79,6 +79,13 @@ class GeneracionAlertasType(graphene.ObjectType):
     total = graphene.Int()
     vacunas_proximas = graphene.Int()
     vacunas_vencidas = graphene.Int()
+    desparasitaciones_proximas = graphene.Int()
+    desparasitaciones_vencidas = graphene.Int()
+    tratamientos_activos = graphene.Int()
+    tiempos_retiro_activos = graphene.Int()
+    mastitis_activas = graphene.Int()
+    examenes_pendientes = graphene.Int()
+    medicamentos_vencidos = graphene.Int()
     partos_proximos = graphene.Int()
     stock_bajo_medicamento = graphene.Int()
     stock_bajo_alimento = graphene.Int()
@@ -457,6 +464,13 @@ class GenerarAlertasAutomaticas(graphene.Mutation):
                 total=c.get("total", 0),
                 vacunas_proximas=c.get("vacunas_proximas", 0),
                 vacunas_vencidas=c.get("vacunas_vencidas", 0),
+                desparasitaciones_proximas=c.get("desparasitaciones_proximas", 0),
+                desparasitaciones_vencidas=c.get("desparasitaciones_vencidas", 0),
+                tratamientos_activos=c.get("tratamientos_activos", 0),
+                tiempos_retiro_activos=c.get("tiempos_retiro_activos", 0),
+                mastitis_activas=c.get("mastitis_activas", 0),
+                examenes_pendientes=c.get("examenes_pendientes", 0),
+                medicamentos_vencidos=c.get("medicamentos_vencidos", 0),
                 partos_proximos=c.get("partos_proximos", 0),
                 stock_bajo_medicamento=c.get("stock_bajo_medicamento", 0),
                 stock_bajo_alimento=c.get("stock_bajo_alimento", 0),

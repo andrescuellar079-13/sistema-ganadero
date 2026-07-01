@@ -17,6 +17,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import SwapHorizIcon      from '@mui/icons-material/SwapHoriz'
 import StatusChip from './ui/StatusChip'
 import AnimalGenealogySection from './AnimalGenealogySection'
+import AdvertenciaRetiro from './AdvertenciaRetiro'
 
 // ── Diccionarios de traducción ───────────────────────────────────────────────
 const SEXO       = { MACHO: 'Macho', HEMBRA: 'Hembra' }
@@ -720,6 +721,7 @@ export default function AnimalDetailModal({ animalId, fincaId, onClose }) {
           </Typography>
         ) : !animal ? null : (
           <>
+            <AdvertenciaRetiro animalId={animalId} fincaId={fincaId} sx={{ mb: 2 }} />
             <TabPanel value={tabIdx} index={0}>
               <TabGeneral animal={animal} />
             </TabPanel>
