@@ -103,7 +103,7 @@ export default function MovimientoAnimalForm({
         type="date"
         value={fechaMovimiento}
         onChange={(e) => setFechaMovimiento(e.target.value)}
-        InputLabelProps={{ shrink: true }}
+        slotProps={{ inputLabel: { shrink: true } }}
         size="small"
         required
         fullWidth

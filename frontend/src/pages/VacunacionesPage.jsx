@@ -280,18 +280,20 @@ export default function VacunacionesPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             sx={{ minWidth: 240 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
             }}
           />
           <TextField size="small" label="Desde" type="date" value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)} InputLabelProps={{ shrink: true }} />
+            onChange={(e) => setFechaDesde(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField size="small" label="Hasta" type="date" value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)} InputLabelProps={{ shrink: true }} />
+            onChange={(e) => setFechaHasta(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField select size="small" label="Vacuna" value={filtroVacuna}
             onChange={(e) => setFiltroVacuna(e.target.value)} sx={{ minWidth: 160 }}>
             <MenuItem value="">Todas</MenuItem>
@@ -434,11 +436,11 @@ export default function VacunacionesPage() {
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <TextField label="Fecha aplicación *" type="date" required size="small" fullWidth
-                  InputLabelProps={{ shrink: true }} value={formData.fechaAplicacion} onChange={onFechaChange} />
+                  slotProps={{ inputLabel: { shrink: true } }} value={formData.fechaAplicacion} onChange={onFechaChange} />
               </Grid>
               <Grid item xs={6}>
                 <TextField label="Próxima dosis" type="date" size="small" fullWidth
-                  InputLabelProps={{ shrink: true }} value={formData.fechaProxima} onChange={set('fechaProxima')} />
+                  slotProps={{ inputLabel: { shrink: true } }} value={formData.fechaProxima} onChange={set('fechaProxima')} />
               </Grid>
               <Grid item xs={6}>
                 <TextField label="Campaña" size="small" fullWidth placeholder="Ej: Aftosa 2024"

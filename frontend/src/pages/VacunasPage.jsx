@@ -197,7 +197,7 @@ export default function VacunasPage() {
               size="small"
               placeholder="Mínimo días"
               sx={{ width: 150 }}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
 
             <TextField
@@ -208,7 +208,7 @@ export default function VacunasPage() {
               size="small"
               placeholder="Máximo días"
               sx={{ width: 150 }}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
           </Stack>
         )}

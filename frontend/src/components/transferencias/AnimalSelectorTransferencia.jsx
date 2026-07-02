@@ -57,15 +57,17 @@ export default function AnimalSelectorTransferencia({
           value={buscarInput}
           onChange={e => setBuscarInput(e.target.value)}
           fullWidth
-          InputProps={{
-            startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-            endAdornment: buscarInput && (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={() => { setBuscarInput(''); setBuscar('') }}>
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+              endAdornment: buscarInput && (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => { setBuscarInput(''); setBuscar('') }}>
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
         <FormControl size="small" sx={{ minWidth: 150 }}>

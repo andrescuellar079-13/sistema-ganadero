@@ -158,7 +158,7 @@ const ReportesVentas = () => {
               onChange={(e) => setFechaInicio(e.target.value)}
               size="small"
               fullWidth
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
           <Grid item xs={12} sm={3}>
@@ -169,7 +169,7 @@ const ReportesVentas = () => {
               onChange={(e) => setFechaFin(e.target.value)}
               size="small"
               fullWidth
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
           <Grid item xs={12} sm={3}>

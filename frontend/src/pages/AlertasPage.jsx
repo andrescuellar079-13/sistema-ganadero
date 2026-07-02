@@ -293,13 +293,15 @@ export default function AlertasPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 size="small"
                 fullWidth
-                InputProps={{
-                  startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
-                  endAdornment: searchTerm && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setSearchTerm('')}><ClearIcon fontSize="small" /></IconButton>
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
+                    endAdornment: searchTerm && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setSearchTerm('')}><ClearIcon fontSize="small" /></IconButton>
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
               <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
@@ -355,9 +357,9 @@ export default function AlertasPage() {
                   </Select>
                 </FormControl>
                 <TextField label="Fecha desde" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                  size="small" InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+                  size="small" slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150 }} />
                 <TextField label="Fecha hasta" type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                  size="small" InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+                  size="small" slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150 }} />
               </Stack>
             )}
 
@@ -397,13 +399,15 @@ export default function AlertasPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 size="small"
                 fullWidth
-                InputProps={{
-                  startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
-                  endAdornment: searchTerm && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setSearchTerm('')}><ClearIcon fontSize="small" /></IconButton>
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
+                    endAdornment: searchTerm && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setSearchTerm('')}><ClearIcon fontSize="small" /></IconButton>
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
               <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
@@ -444,9 +448,9 @@ export default function AlertasPage() {
                   </Select>
                 </FormControl>
                 <TextField label="Fecha desde" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                  size="small" InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+                  size="small" slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150 }} />
                 <TextField label="Fecha hasta" type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                  size="small" InputLabelProps={{ shrink: true }} sx={{ width: 150 }} />
+                  size="small" slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150 }} />
               </Stack>
             )}
 
@@ -530,7 +534,7 @@ export default function AlertasPage() {
         <DialogTitle sx={{ fontWeight: 700 }}>Editar Gasto</DialogTitle>
         <DialogContent dividers>
           <Box component="form" id="gasto-form" onSubmit={handleActualizarGasto} sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField label="Fecha" type="date" required size="small" InputLabelProps={{ shrink: true }} value={editForm.fecha} onChange={setField('fecha')} />
+            <TextField label="Fecha" type="date" required size="small" slotProps={{ inputLabel: { shrink: true } }} value={editForm.fecha} onChange={setField('fecha')} />
             <TextField select label="Tipo de gasto" required size="small" value={editForm.tipoGasto} onChange={setField('tipoGasto')}>
               {TIPOS_GASTO.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
             </TextField>

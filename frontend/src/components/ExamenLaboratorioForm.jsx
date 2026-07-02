@@ -208,7 +208,7 @@ const ExamenLaboratorioForm = ({ onSuccess }) => {
               onChange={(e) => setFormData({ ...formData, fechaToma: e.target.value })}
               fullWidth
               size="small"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               required
             />
           </Grid>
@@ -221,7 +221,7 @@ const ExamenLaboratorioForm = ({ onSuccess }) => {
               onChange={(e) => setFormData({ ...formData, fechaResultado: e.target.value })}
               fullWidth
               size="small"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
 

@@ -117,7 +117,7 @@ export default function IniciarEngordeDialog({ open, onClose, animal, onSubmit }
           <Grid item xs={12} sm={6}>
             <TextField fullWidth size="small" type="date" label="Fecha de inicio *"
               value={form.fechaInicio} onChange={set('fechaInicio')}
-              InputLabelProps={{ shrink: true }} />
+              slotProps={{ inputLabel: { shrink: true } }} />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField fullWidth size="small" select label="Tipo de engorde"
@@ -130,12 +130,12 @@ export default function IniciarEngordeDialog({ open, onClose, animal, onSubmit }
           <Grid item xs={12} sm={6}>
             <TextField fullWidth size="small" type="number" label="Peso inicial (kg) *"
               value={form.pesoInicial} onChange={set('pesoInicial')}
-              inputProps={{ min: 0, step: 0.1 }} />
+              slotProps={{ htmlInput: { min: 0, step: 0.1 } }} />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField fullWidth size="small" type="number" label="Peso objetivo (kg) *"
               value={form.pesoObjetivo} onChange={set('pesoObjetivo')}
-              inputProps={{ min: 0, step: 0.1 }} />
+              slotProps={{ htmlInput: { min: 0, step: 0.1 } }} />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField fullWidth size="small" label="Lote / grupo"

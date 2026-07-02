@@ -164,15 +164,17 @@ export default function TransferenciasTab({ fincas = [], fincaId = null }) {
             placeholder="Buscar por finca, responsable..."
             value={filtros.buscar}
             onChange={setFiltro('buscar')}
-            InputProps={{
-              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-              endAdornment: filtros.buscar && (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setFiltros(p => ({ ...p, buscar: '' }))}>
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+                endAdornment: filtros.buscar && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setFiltros(p => ({ ...p, buscar: '' }))}>
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
           <FormControl size="small" sx={{ minWidth: 170 }}>

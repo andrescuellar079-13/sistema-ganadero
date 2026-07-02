@@ -171,12 +171,12 @@ const DashboardPage = () => {
             {tipoFiltro === 'PERSONALIZADO' && (
               <>
                 <TextField
-                  size="small" type="date" label="Desde" InputLabelProps={{ shrink: true }}
+                  size="small" type="date" label="Desde" slotProps={{ inputLabel: { shrink: true } }}
                   value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
                   sx={{ bgcolor: ganado.color.surface, borderRadius: `${ganado.radius.sm}px` }}
                 />
                 <TextField
-                  size="small" type="date" label="Hasta" InputLabelProps={{ shrink: true }}
+                  size="small" type="date" label="Hasta" slotProps={{ inputLabel: { shrink: true } }}
                   value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
                   sx={{ bgcolor: ganado.color.surface, borderRadius: `${ganado.radius.sm}px` }}
                 />

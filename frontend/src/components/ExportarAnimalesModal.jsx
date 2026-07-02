@@ -427,12 +427,12 @@ export default function ExportarAnimalesModal({
           <Grid item xs={12} sm={6} md={4}>
             <TextField fullWidth size="small" type="date" label="Nac. desde"
               value={fechaNacDesde} onChange={e => setFechaNacDesde(e.target.value)}
-              InputLabelProps={{ shrink: true }} />
+              slotProps={{ inputLabel: { shrink: true } }} />
           </Grid>
           <Grid item xs={12} sm={6} md={4}>
             <TextField fullWidth size="small" type="date" label="Nac. hasta"
               value={fechaNacHasta} onChange={e => setFechaNacHasta(e.target.value)}
-              InputLabelProps={{ shrink: true }} />
+              slotProps={{ inputLabel: { shrink: true } }} />
           </Grid>
 
           {/* Fechas de ingreso */}
@@ -441,12 +441,12 @@ export default function ExportarAnimalesModal({
               <Grid item xs={12} sm={6} md={4}>
                 <TextField fullWidth size="small" type="date" label="Ingreso desde"
                   value={fechaIngDesde} onChange={e => setFechaIngDesde(e.target.value)}
-                  InputLabelProps={{ shrink: true }} />
+                  slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField fullWidth size="small" type="date" label="Ingreso hasta"
                   value={fechaIngHasta} onChange={e => setFechaIngHasta(e.target.value)}
-                  InputLabelProps={{ shrink: true }} />
+                  slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
             </>
           )}
@@ -457,12 +457,12 @@ export default function ExportarAnimalesModal({
               <Grid item xs={12} sm={6} md={4}>
                 <TextField fullWidth size="small" type="date" label="Venta desde"
                   value={fechaVentaDesde} onChange={e => setFechaVentaDesde(e.target.value)}
-                  InputLabelProps={{ shrink: true }} />
+                  slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField fullWidth size="small" type="date" label="Venta hasta"
                   value={fechaVentaHasta} onChange={e => setFechaVentaHasta(e.target.value)}
-                  InputLabelProps={{ shrink: true }} />
+                  slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
             </>
           )}
@@ -473,12 +473,12 @@ export default function ExportarAnimalesModal({
               <Grid item xs={12} sm={6} md={4}>
                 <TextField fullWidth size="small" type="date" label="Baja desde"
                   value={fechaBajaDesde} onChange={e => setFechaBajaDesde(e.target.value)}
-                  InputLabelProps={{ shrink: true }} />
+                  slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <TextField fullWidth size="small" type="date" label="Baja hasta"
                   value={fechaBajaHasta} onChange={e => setFechaBajaHasta(e.target.value)}
-                  InputLabelProps={{ shrink: true }} />
+                  slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
             </>
           )}

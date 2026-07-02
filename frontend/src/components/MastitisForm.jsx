@@ -164,7 +164,7 @@ const MastitisForm = ({ onSuccess }) => {
               onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
               fullWidth
               size="small"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               required
             />
           </Grid>

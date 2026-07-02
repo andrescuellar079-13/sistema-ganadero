@@ -10,7 +10,12 @@
 //   generarExcelAnimalCompleto(data, animal)-> descarga ficha_animal_<arete>_<nombre>.xlsx
 //
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// jspdf-autotable resuelve por su entrada CommonJS bajo Vite: según el interop,
+// el import por defecto puede llegar como la función o como el objeto del módulo
+// ({ default: fn, applyPlugin, ... }). Normalizamos para usar siempre la función.
+import autoTableImport from 'jspdf-autotable'
+const autoTable =
+  typeof autoTableImport === 'function' ? autoTableImport : autoTableImport.default
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 

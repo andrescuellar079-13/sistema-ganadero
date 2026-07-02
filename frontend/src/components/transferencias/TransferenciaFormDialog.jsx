@@ -120,7 +120,7 @@ export default function TransferenciaFormDialog({
                 label="Fecha de transferencia"
                 value={form.fechaTransferencia}
                 onChange={set('fechaTransferencia')}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

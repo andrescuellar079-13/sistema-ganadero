@@ -46,7 +46,7 @@ export default function AnimalSearchBar({
       value={inputValue}
       onChange={handleChange}
       placeholder={placeholder}
-      InputProps={{
+      slotProps={{ input: {
         startAdornment: (
           <InputAdornment position="start">
             <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
@@ -61,7 +61,7 @@ export default function AnimalSearchBar({
             </Tooltip>
           </InputAdornment>
         ) : null,
-      }}
+      } }}
       sx={{
         '& .MuiOutlinedInput-root': {
           borderRadius: 2,

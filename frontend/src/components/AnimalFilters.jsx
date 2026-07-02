@@ -76,14 +76,14 @@ function DateRangeGroup({ label, desde, hasta, onDesde, onHasta }) {
         size="small" label="Desde" type="date"
         value={desde || ''}
         onChange={(e) => onDesde(e.target.value || null)}
-        InputLabelProps={{ shrink: true }}
+        slotProps={{ inputLabel: { shrink: true } }}
         sx={{ width: 155 }}
       />
       <TextField
         size="small" label="Hasta" type="date"
         value={hasta || ''}
         onChange={(e) => onHasta(e.target.value || null)}
-        InputLabelProps={{ shrink: true }}
+        slotProps={{ inputLabel: { shrink: true } }}
         sx={{ width: 155 }}
       />
     </Box>
@@ -208,16 +208,14 @@ export default function AnimalFilters({
               size="small" label="Mín" type="number"
               value={pesoMin ?? ''}
               onChange={(e) => onPesoMin(e.target.value !== '' ? Number(e.target.value) : null)}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ min: 0, step: 1 }}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, step: 1 } }}
               sx={{ width: 95 }}
             />
             <TextField
               size="small" label="Máx" type="number"
               value={pesoMax ?? ''}
               onChange={(e) => onPesoMax(e.target.value !== '' ? Number(e.target.value) : null)}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ min: 0, step: 1 }}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, step: 1 } }}
               sx={{ width: 95 }}
             />
           </Box>

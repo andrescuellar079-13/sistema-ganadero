@@ -249,12 +249,12 @@ export default function ReportModalReusable({
                 <Grid item xs={12} sm={6} md={3}>
                   <TextField fullWidth size="small" type="date" label={`${labelFecha} desde`}
                     value={fechaInicio} onChange={e => setFechaInicio(e.target.value)}
-                    InputLabelProps={{ shrink: true }} />
+                    slotProps={{ inputLabel: { shrink: true } }} />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <TextField fullWidth size="small" type="date" label={`${labelFecha} hasta`}
                     value={fechaFin} onChange={e => setFechaFin(e.target.value)}
-                    InputLabelProps={{ shrink: true }} />
+                    slotProps={{ inputLabel: { shrink: true } }} />
                 </Grid>
               </>
             )}

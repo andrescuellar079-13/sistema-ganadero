@@ -122,7 +122,7 @@ export default function RrhhPage() {
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               sx={{ maxWidth: 320 }}
-              InputProps={{ startAdornment: <InputAdornment position="start"><SearchOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> }}
+              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
             />
             <Tooltip title="Nuevo empleado">
               <IconButton color="primary" onClick={() => { setEditEmp(null); setShowEmpModal(true) }}
