@@ -47,8 +47,11 @@ const sectionSx = { mb: `${ganado.space.sectionGap}px` }
 
 const DashboardPage = () => {
   const navigate = useNavigate()
-  const { fincaActual } = useFincas()
-  const fincaId = fincaActual?.id || '1'
+  const { fincaActual, loading: loadingFincas } = useFincas()
+  // Sin fallback a '1': hasta que la finca activa cargue, fincaId es undefined y
+  // useDashboard omite la query (skip: !fincaId). Evita pedir GetDashboard con una
+  // finca inexistente y el error "Finca no encontrada" en el primer render.
+  const fincaId = fincaActual?.id
   const anioActual = new Date().getFullYear()
 
   const [tipoFiltro, setTipoFiltro] = useState('ANIO')
@@ -61,11 +64,20 @@ const DashboardPage = () => {
   } = useDashboard(fincaId, { tipoFiltro, fechaInicio, fechaFin })
 
   // -------- Estados globales de carga / error --------
-  if (loading && !secciones?.animales) {
+  if ((loadingFincas || loading) && !secciones?.animales) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 2, bgcolor: ganado.color.bg }}>
         <CircularProgress sx={{ color: ganado.color.primary }} />
         <Typography sx={{ color: ganado.color.muted }}>Cargando Dashboard...</Typography>
+      </Box>
+    )
+  }
+  if (!fincaId) {
+    return (
+      <Box sx={{ p: 3, bgcolor: ganado.color.bg, minHeight: '100%' }}>
+        <Alert severity="info" sx={{ maxWidth: 640, mx: 'auto', mt: 6 }}>
+          No hay una finca activa seleccionada. Elegí una finca para ver el Dashboard.
+        </Alert>
       </Box>
     )
   }

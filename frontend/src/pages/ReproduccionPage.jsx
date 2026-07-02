@@ -700,10 +700,10 @@ export default function ReproduccionPage() {
       </Stack>
 
       <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={3}><KPI label="Vacas preñadas" value={vacasPrenadas.length} accent="#2E7D32" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><KPI label="Inseminaciones" value={inseminacionesFiltradas.length} accent="#1565C0" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><KPI label="Partos" value={partosFiltrados.length} accent="#6A1B9A" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><ProximosPartosCard proximosPartos={proximosPartos} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}><KPI label="Vacas preñadas" value={vacasPrenadas.length} accent="#2E7D32" /></Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}><KPI label="Inseminaciones" value={inseminacionesFiltradas.length} accent="#1565C0" /></Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}><KPI label="Partos" value={partosFiltrados.length} accent="#6A1B9A" /></Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}><ProximosPartosCard proximosPartos={proximosPartos} /></Grid>
       </Grid>
 
       {/* Barra de búsqueda y filtros */}

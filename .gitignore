@@ -31,3 +31,5 @@ npm-debug.log*
 # Claude (config local / skills / guia - solo en rama de desarrollo)
 .claude/
 CLAUDE.md
+# Superpowers brainstorming (mockups efímeros)
+.superpowers/
