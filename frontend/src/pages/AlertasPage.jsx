@@ -286,7 +286,7 @@ export default function AlertasPage() {
           </Grid>
 
           <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
               <TextField
                 placeholder="Buscar por mensaje, tipo, arete del animal..."
                 value={searchTerm}
@@ -392,7 +392,7 @@ export default function AlertasPage() {
           </Grid>
 
           <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
               <TextField
                 placeholder="Buscar por descripción, tipo, proveedor, arete..."
                 value={searchTerm}

@@ -821,7 +821,7 @@ export default function SanidadPage() {
       {/* Barra de búsqueda y filtros */}
       {mostrarFiltros && (
         <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
             <TextField
               placeholder="Buscar por arete, nombre, diagnóstico, laboratorio..."
               value={searchTerm}
@@ -1033,7 +1033,7 @@ export default function SanidadPage() {
             <Paper elevation={0} sx={{ p: 1.5, borderRadius: 2,
               border: `1px solid ${accionMsg.type === 'success' ? '#86EFAC' : '#FCA5A5'}`,
               bgcolor: accionMsg.type === 'success' ? '#F0FDF4' : '#FEF2F2' }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="body2" sx={{ color: accionMsg.type === 'success' ? '#166534' : '#991B1B' }}>
                   {accionMsg.text}
                 </Typography>
@@ -1084,7 +1084,7 @@ export default function SanidadPage() {
                           <Chip size="small" label="Activo" sx={{ bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 500 }} />
                         </TableCell>
                         <TableCell align="center">
-                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                          <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
                             <Tooltip title="Ver detalle">
                               <IconButton size="small" onClick={() => setDetalleTratamiento(t)}>
                                 <VisibilityOutlinedIcon fontSize="small" />

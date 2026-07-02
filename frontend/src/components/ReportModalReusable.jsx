@@ -231,7 +231,7 @@ export default function ReportModalReusable({
           <Typography variant="subtitle2" fontWeight={700} gutterBottom>
             Filtros del reporte
           </Typography>
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>Tipo de reporte</InputLabel>

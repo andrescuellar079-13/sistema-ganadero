@@ -432,7 +432,7 @@ export default function ProduccionPage() {
       {/* Barra de búsqueda y filtros - solo visible en la pestaña de Lactancias */}
       {tabIdx === TAB_LACTANCIAS && (
         <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
             <TextField
               placeholder="Buscar por arete o nombre de la vaca..."
               value={searchTerm}

@@ -134,7 +134,7 @@ const ReportesVentas = () => {
           <DateRangeIcon /> Filtros de Fecha
         </Typography>
         
-        <Grid container spacing={2} alignItems="center">
+        <Grid container spacing={2} sx={{ alignItems: 'center' }}>
           <Grid item xs={12} sm={3}>
             <FormControl fullWidth size="small">
               <InputLabel>Período rápido</InputLabel>

@@ -418,7 +418,7 @@ export default function VacunacionesPage() {
             {/* Datos informativos de la vacuna */}
             {selectedVacuna && (
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: '#F8FAFC' }}>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap divider={<Divider orientation="vertical" flexItem />}>
+                <Stack direction="row" spacing={1} useFlexGap divider={<Divider orientation="vertical" flexItem />} sx={{ flexWrap: 'wrap' }}>
                   <Typography variant="caption">Intervalo: <b>{selectedVacuna.intervaloDias || '—'} días</b></Typography>
                   <Typography variant="caption">Stock: <b>{selectedVacuna.stockCantidad}</b> (mín {selectedVacuna.stockMinimo})</Typography>
                   <Typography variant="caption">Vence: <b>{fmt(selectedVacuna.fechaVencimiento)}</b></Typography>

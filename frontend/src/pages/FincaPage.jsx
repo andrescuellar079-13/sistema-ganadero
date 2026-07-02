@@ -127,7 +127,7 @@ export default function FincaPage() {
       <TabPanel value={tab} index={0}>
         {/* Barra de búsqueda */}
         <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
             <TextField
               placeholder="Buscar por nombre, propietario, ubicación, teléfono..."
               value={searchTerm}

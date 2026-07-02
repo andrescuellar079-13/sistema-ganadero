@@ -123,7 +123,7 @@ const ReportesProveedores = ({ proveedores, onClose }) => {
       <DialogContent dividers>
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>Filtros del Reporte</Typography>
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             <Grid item xs={12} md={3}>
               <TextField 
                 label="Fecha Inicio" 
@@ -358,7 +358,7 @@ export default function ProveedoresPage() {
 
       {/* Barra de búsqueda */}
       <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
           <TextField
             placeholder="Buscar por nombre, apellidos, teléfono, NIT/CI..."
             value={searchTerm}

@@ -207,7 +207,7 @@ function ConfiguracionPage() {
               
               <Grid item xs={12}>
                 <Card variant="outlined" sx={{ p: 3, bgcolor: '#f9f9f9' }}>
-                  <Grid container spacing={3} alignItems="center">
+                  <Grid container spacing={3} sx={{ alignItems: 'center' }}>
                     <Grid item xs={12} md={3} sx={{ textAlign: 'center' }}>
                       {logoToShow ? (
                         <Box

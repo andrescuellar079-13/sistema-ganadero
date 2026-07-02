@@ -344,7 +344,7 @@ export default function VentasPage() {
         <>
           {/* Filtros */}
           <Paper elevation={0} sx={{ p: 2, border: '1px solid #E2E8F0', borderRadius: 2 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
               <TextField
                 placeholder="Buscar por cliente, CI, corral o guía de salida..."
                 value={searchTerm}
@@ -384,7 +384,7 @@ export default function VentasPage() {
             </Stack>
 
             {showFilters && (
-              <Stack direction="row" spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0' }} flexWrap="wrap">
+              <Stack direction="row" spacing={2} sx={{ mt: 2, pt: 2, borderTop: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 180 }}>
                   <InputLabel>Modalidad</InputLabel>
                   <Select value={filterModalidad} onChange={(e) => setFilterModalidad(e.target.value)} label="Modalidad">
@@ -495,7 +495,7 @@ export default function VentasPage() {
                             <Chip label={v.detalles?.length || 0} size="small" variant="outlined" />
                           </TableCell>
                           <TableCell align="center">
-                            <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
                               <Tooltip title="Ver detalles">
                                 <IconButton size="small" onClick={() => handleViewDetails(v)} sx={{ color: '#3b82f6' }}>
                                   <VisibilityIcon fontSize="small" />

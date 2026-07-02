@@ -153,7 +153,7 @@ const DashboardPage = () => {
               Resumen operativo · {fincaActual?.nombre || 'Finca'}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1.25} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <FormControl size="small">
               <Select
                 value={tipoFiltro}
