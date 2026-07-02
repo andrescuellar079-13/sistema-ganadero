@@ -45,6 +45,27 @@ describe('importacionService', () => {
     expect(opts.body.get('finca_id')).toBe('5')
     expect(opts.body.get('modo')).toBe('SOLO_CREAR')
     expect(opts.body.get('modo_estricto')).toBe('true')
+    // Flags de creación automática: por defecto en 'false'.
+    expect(opts.body.get('crear_razas')).toBe('false')
+    expect(opts.body.get('crear_categorias')).toBe('false')
+    expect(opts.body.get('crear_parcelas')).toBe('false')
+  })
+
+  it('previsualizar envía los flags de creación automática cuando se activan', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ ok: true }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await previsualizar({
+      fincaId: 1, archivo: { name: 'a.xlsx' }, modo: 'SOLO_CREAR',
+      modoEstricto: false, crearRazas: true, crearCategorias: true,
+      crearParcelas: true,
+    })
+    const [, opts] = fetchMock.mock.calls[0]
+    expect(opts.body.get('crear_razas')).toBe('true')
+    expect(opts.body.get('crear_categorias')).toBe('true')
+    expect(opts.body.get('crear_parcelas')).toBe('true')
   })
 
   it('confirmar manda JSON con el id y devuelve el error del backend en fallos', async () => {

@@ -48,6 +48,11 @@ class ImportacionGanadera(models.Model):
     # False = PARCIAL (guarda válidas, rechaza inválidas en el reporte).
     modo_estricto = models.BooleanField(default=True)
 
+    # Creación automática de catálogos faltantes referenciados por los animales.
+    crear_razas = models.BooleanField(default=False)
+    crear_categorias = models.BooleanField(default=False)
+    crear_parcelas = models.BooleanField(default=False)
+
     total_filas = models.IntegerField(default=0)
     filas_validas = models.IntegerField(default=0)
     creados = models.IntegerField(default=0)

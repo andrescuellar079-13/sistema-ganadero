@@ -132,9 +132,13 @@ def _err(hoja, numero_fila, campo, valor, codigo, mensaje, nro_arete=None):
     }
 
 
-def validar(datos, contexto, modo):
+def validar(datos, contexto, modo, opciones=None):
+    opciones = opciones or constantes.Opciones()
     errores = []
     hojas_resultado = {}
+    # Catálogos referenciados que NO existen aún. Clave = nombre normalizado,
+    # valor = nombre original (primero visto), para crearlos sin duplicar.
+    nuevos = {"razas": {}, "categorias": {}, "parcelas": {}}
 
     # Nombres de parcela disponibles = existentes en BD + las del archivo.
     parcelas_archivo = set()
@@ -163,7 +167,7 @@ def validar(datos, contexto, modo):
     if A in datos:
         hojas_resultado[A] = _validar_animales(
             datos[A], contexto, modo, parcelas_disponibles,
-            animales_archivo, errores
+            animales_archivo, opciones, nuevos, errores
         )
 
     # --- PESOS ---
@@ -172,7 +176,12 @@ def validar(datos, contexto, modo):
             datos[PE], contexto, animales_archivo, errores
         )
 
-    return {"hojas": hojas_resultado, "errores": errores}
+    catalogos_nuevos = {clave: list(d.values()) for clave, d in nuevos.items()}
+    return {
+        "hojas": hojas_resultado,
+        "errores": errores,
+        "catalogos_nuevos": catalogos_nuevos,
+    }
 
 
 def _resumen_base(total):
@@ -212,8 +221,13 @@ def _validar_parcelas(info, errores):
     return resultado
 
 
+def _registrar_nuevo(nuevos, clave, nombre):
+    """Guarda un catálogo nuevo (sin duplicar por nombre normalizado)."""
+    nuevos[clave].setdefault(nombre.strip().lower(), nombre.strip())
+
+
 def _validar_animales(info, contexto, modo, parcelas_disponibles,
-                      animales_archivo, errores):
+                      animales_archivo, opciones, nuevos, errores):
     resumen = _resumen_base(len(info["filas"]))
     resumen.update({"nuevas": 0, "actualizadas": 0, "omitidas": 0})
     resultado = {"filas_validas": [], "resumen": resumen}
@@ -245,22 +259,31 @@ def _validar_animales(info, contexto, modo, parcelas_disponibles,
             errores.append(_err(A, n, "nro_arete", arete, "ARETE_DUPLICADO_ARCHIVO",
                                 "El nro_arete está repetido en el archivo.", arete))
 
-        # Catálogos: raza / categoría deben existir
+        # Catálogos: raza / categoría / parcela. SIEMPRE se registran como
+        # "nuevos" cuando no existen (para mostrarlos en la previsualización);
+        # solo se marca error si la creación automática está desactivada.
         if fdatos.get("raza") and not contexto.raza(fdatos["raza"]):
-            valida = False
-            errores.append(_err(A, n, "raza", fdatos["raza"], "RAZA_NO_EXISTE",
-                                f"La raza '{fdatos['raza']}' no existe en el catálogo.", arete))
+            _registrar_nuevo(nuevos, "razas", fdatos["raza"])
+            if not opciones.crear_razas:
+                valida = False
+                errores.append(_err(A, n, "raza", fdatos["raza"], "RAZA_NO_EXISTE",
+                                    f"La raza '{fdatos['raza']}' no existe en el catálogo.", arete))
         if fdatos.get("categoria") and not contexto.categoria(fdatos["categoria"]):
-            valida = False
-            errores.append(_err(A, n, "categoria", fdatos["categoria"], "CATEGORIA_NO_EXISTE",
-                                f"La categoría '{fdatos['categoria']}' no existe.", arete))
+            _registrar_nuevo(nuevos, "categorias", fdatos["categoria"])
+            if not opciones.crear_categorias:
+                valida = False
+                errores.append(_err(A, n, "categoria", fdatos["categoria"], "CATEGORIA_NO_EXISTE",
+                                    f"La categoría '{fdatos['categoria']}' no existe.", arete))
 
-        # Parcela actual debe existir (en BD o en la hoja PARCELAS)
+        # Parcela actual debe existir (en BD o en la hoja PARCELAS), salvo que
+        # se permita crearla automáticamente.
         parcela = fdatos.get("parcela_actual")
         if parcela and parcela.strip().lower() not in parcelas_disponibles:
-            valida = False
-            errores.append(_err(A, n, "parcela_actual", parcela, "PARCELA_NO_EXISTE",
-                                f"La parcela '{parcela}' no existe ni viene en la hoja PARCELAS.", arete))
+            _registrar_nuevo(nuevos, "parcelas", parcela)
+            if not opciones.crear_parcelas:
+                valida = False
+                errores.append(_err(A, n, "parcela_actual", parcela, "PARCELA_NO_EXISTE",
+                                    f"La parcela '{parcela}' no existe ni viene en la hoja PARCELAS.", arete))
 
         # Padre / madre
         valida = _validar_progenitor(
@@ -279,10 +302,6 @@ def _validar_animales(info, contexto, modo, parcelas_disponibles,
         fdatos["_accion"] = accion
 
         if valida:
-            fdatos["_raza_obj"] = contexto.raza(fdatos["raza"]) if fdatos.get("raza") else None
-            fdatos["_categoria_obj"] = (
-                contexto.categoria(fdatos["categoria"]) if fdatos.get("categoria") else None
-            )
             resultado["filas_validas"].append({"numero_fila": n, "datos": fdatos})
             resumen["validas"] += 1
             if accion == "actualizar":

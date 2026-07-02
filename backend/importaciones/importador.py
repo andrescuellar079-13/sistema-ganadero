@@ -1,7 +1,8 @@
 """Procesamiento (escritura) de una importación ya validada.
 
 Orden crítico (dentro de una única transacción):
-  1. Crear parcelas nuevas (hoja PARCELAS).
+  0. Crear catálogos faltantes (razas/categorías) si las opciones lo permiten.
+  1. Crear parcelas nuevas (hoja PARCELAS + referenciadas por animales).
   2. Crear animales SIN padre/madre  (bulk_create por lotes).
   3. Actualizar animales existentes   (bulk_update por lotes).
   4. Segunda pasada: resolver padre/madre (ya existen todos los aretes).
@@ -35,47 +36,89 @@ def _aplicar_campos(animal, datos, contexto, solo_provistos):
             continue
         if datos.get(campo) is not None:
             setattr(animal, campo, datos[campo])
+    # Las FK se resuelven por nombre contra el contexto (ya incluye los
+    # catálogos recién creados en la pasada 0).
     if not solo_provistos or "raza" in provistos:
-        animal.raza = datos.get("_raza_obj")
+        animal.raza = contexto.raza(datos["raza"]) if datos.get("raza") else None
     if not solo_provistos or "categoria" in provistos:
-        animal.categoria = datos.get("_categoria_obj")
+        animal.categoria = (
+            contexto.categoria(datos["categoria"]) if datos.get("categoria") else None
+        )
+
+
+def _crear_catalogos(contexto, nuevos, opciones, contadores):
+    """Crea razas/categorías faltantes y las registra en el contexto."""
+    from catalogos.models import Raza, CategoriaAnimal
+
+    if opciones.crear_razas:
+        faltan = [n for n in nuevos.get("razas", []) if not contexto.raza(n)]
+        if faltan:
+            Raza.objects.bulk_create([Raza(nombre=n) for n in faltan], batch_size=LOTE)
+            for r in Raza.objects.filter(nombre__in=faltan, activo=True):
+                contexto.razas[r.nombre.strip().lower()] = r
+            contadores["razas_creadas"] = len(faltan)
+
+    if opciones.crear_categorias:
+        faltan = [n for n in nuevos.get("categorias", []) if not contexto.categoria(n)]
+        if faltan:
+            CategoriaAnimal.objects.bulk_create(
+                [CategoriaAnimal(nombre=n) for n in faltan], batch_size=LOTE
+            )
+            for c in CategoriaAnimal.objects.filter(nombre__in=faltan, activo=True):
+                contexto.categorias[c.nombre.strip().lower()] = c
+            contadores["categorias_creadas"] = len(faltan)
 
 
 @transaction.atomic
-def procesar(finca, usuario, resultado, contexto, modo):
+def procesar(finca, usuario, resultado, contexto, modo, opciones=None):
     """Escribe en BD las filas válidas. Devuelve un dict de contadores."""
     from animales.models import Animal, Parcela, AnimalParcela
     from produccion.models import RegistroPeso
 
+    opciones = opciones or constantes.Opciones()
     hojas = resultado["hojas"]
+    nuevos = resultado.get("catalogos_nuevos", {})
     contadores = {
         "creados": 0, "actualizados": 0, "omitidos": 0,
-        "parcelas_creadas": 0, "pesos_creados": 0, "pesos_omitidos": 0,
+        "parcelas_creadas": 0, "razas_creadas": 0, "categorias_creadas": 0,
+        "pesos_creados": 0, "pesos_omitidos": 0,
     }
 
-    # ---- 1. Parcelas ----
+    # ---- 0. Catálogos faltantes (razas / categorías) ----
+    _crear_catalogos(contexto, nuevos, opciones, contadores)
+
+    # ---- 1. Parcelas (hoja PARCELAS + referenciadas por animales) ----
     parcelas_por_nombre = dict(contexto.parcelas)  # nombre_lower -> Parcela
+    nuevas, vistos = [], set()
+
+    def _agendar_parcela(nombre, datos=None):
+        clave = nombre.strip().lower()
+        if clave in parcelas_por_nombre or clave in vistos:
+            return
+        vistos.add(clave)
+        datos = datos or {}
+        nuevas.append(Parcela(
+            finca=finca,
+            nombre=nombre.strip(),
+            estado=datos.get("estado") or "ACTIVA",
+            tamano=datos.get("tamano") or 0,
+            capacidad_maxima=datos.get("capacidad_maxima") or 0,
+            tipo_pastura=datos.get("tipo_pastura"),
+        ))
+
     hoja_parcelas = hojas.get(constantes.HOJA_PARCELAS)
     if hoja_parcelas:
-        nuevas = []
         for fila in hoja_parcelas["filas_validas"]:
             d = fila["datos"]
-            clave = d["nombre"].strip().lower()
-            if clave in parcelas_por_nombre:
-                continue  # ya existe → no duplicar
-            nuevas.append(Parcela(
-                finca=finca,
-                nombre=d["nombre"].strip(),
-                estado=d.get("estado") or "ACTIVA",
-                tamano=d.get("tamano") or 0,
-                capacidad_maxima=d.get("capacidad_maxima") or 0,
-                tipo_pastura=d.get("tipo_pastura"),
-            ))
-        if nuevas:
-            Parcela.objects.bulk_create(nuevas, batch_size=LOTE)
-            contadores["parcelas_creadas"] = len(nuevas)
-            for p in Parcela.objects.filter(finca=finca):
-                parcelas_por_nombre[p.nombre.strip().lower()] = p
+            _agendar_parcela(d["nombre"], d)
+    if opciones.crear_parcelas:
+        for nombre in nuevos.get("parcelas", []):
+            _agendar_parcela(nombre)
+    if nuevas:
+        Parcela.objects.bulk_create(nuevas, batch_size=LOTE)
+        contadores["parcelas_creadas"] = len(nuevas)
+        for p in Parcela.objects.filter(finca=finca):
+            parcelas_por_nombre[p.nombre.strip().lower()] = p
 
     # ---- 2 y 3. Animales: crear / actualizar ----
     hoja_animales = hojas.get(constantes.HOJA_ANIMALES)

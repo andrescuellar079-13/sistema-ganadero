@@ -55,15 +55,25 @@ def _mapear_fila(celdas, mapa_headers, indices):
 
 
 def _procesar_tabla(clave_hoja, encabezados, filas_datos, fila_offset):
-    """Convierte encabezados + filas en la estructura normalizada de una hoja."""
+    """Convierte encabezados + filas en la estructura normalizada de una hoja.
+
+    Devuelve, además de ``headers``/``filas``, un ``mapeo`` con una entrada por
+    cada columna del archivo: ``{"columna": <texto original>, "key": <key|None>}``
+    para que el frontend muestre qué reconoció (y qué no) el importador.
+    """
     mapa = constantes.header_a_key(clave_hoja)
     indices = {}
     headers_encontrados = set()
+    mapeo = []
     for idx, encabezado in enumerate(encabezados):
-        nombre = (str(encabezado).strip().lower() if encabezado is not None else "")
-        if nombre in mapa:
-            indices[idx] = mapa[nombre]
-            headers_encontrados.add(mapa[nombre])
+        if encabezado is None or str(encabezado).strip() == "":
+            continue
+        key = mapa.get(constantes.normalizar_encabezado(encabezado))
+        mapeo.append({"columna": str(encabezado).strip(), "key": key})
+        # La primera columna que mapea a una key gana; las repetidas se ignoran.
+        if key and key not in headers_encontrados:
+            indices[idx] = key
+            headers_encontrados.add(key)
 
     filas = []
     for offset, celdas in enumerate(filas_datos):
@@ -72,7 +82,7 @@ def _procesar_tabla(clave_hoja, encabezados, filas_datos, fila_offset):
             continue
         filas.append({"numero_fila": fila_offset + offset, "valores": valores})
 
-    return {"headers": headers_encontrados, "filas": filas}
+    return {"headers": headers_encontrados, "filas": filas, "mapeo": mapeo}
 
 
 def _leer_xlsx(contenido):
@@ -132,7 +142,7 @@ def _leer_csv(contenido, nombre_hoja=None):
 
 
 def _inferir_hoja(encabezados):
-    nombres = {(h or "").strip().lower() for h in encabezados}
+    nombres = {constantes.normalizar_encabezado(h) for h in encabezados if h}
     mejor, mejor_puntaje = None, 0
     for clave in constantes.HOJAS:
         mapa = set(constantes.header_a_key(clave).keys())

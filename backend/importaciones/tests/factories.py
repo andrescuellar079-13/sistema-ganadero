@@ -22,5 +22,23 @@ def construir_xlsx(hojas):
     return buffer.getvalue()
 
 
+def construir_xlsx_crudo(hojas):
+    """Igual que ``construir_xlsx`` pero con encabezados arbitrarios.
+
+    ``hojas``: {"ANIMALES": {"headers": [...], "filas": [[c1, c2, ...], ...]}}.
+    Sirve para probar el matching de alias/acentos.
+    """
+    wb = Workbook()
+    wb.remove(wb.active)
+    for nombre, contenido in hojas.items():
+        ws = wb.create_sheet(nombre)
+        ws.append(contenido["headers"])
+        for fila in contenido["filas"]:
+            ws.append(list(fila))
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 def media_temporal():
     return tempfile.mkdtemp(prefix="imp_test_media_")

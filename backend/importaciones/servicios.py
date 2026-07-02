@@ -37,6 +37,19 @@ def _resumen_por_hoja(resultado):
     return {hoja: r["resumen"] for hoja, r in resultado["hojas"].items()}
 
 
+def _mapeo_por_hoja(datos):
+    """Columnas detectadas por hoja (qué reconoció el importador y qué no)."""
+    return {hoja: info.get("mapeo", []) for hoja, info in datos.items()}
+
+
+def _opciones_de(importacion):
+    return constantes.Opciones(
+        crear_razas=importacion.crear_razas,
+        crear_categorias=importacion.crear_categorias,
+        crear_parcelas=importacion.crear_parcelas,
+    )
+
+
 def _validar_archivo(importacion):
     """Lee + valida el archivo de la importación. Devuelve (datos, contexto,
     resultado) o lanza lectores.ArchivoInvalidoError."""
@@ -48,18 +61,24 @@ def _validar_archivo(importacion):
 
     datos = lectores.leer_archivo(contenido, importacion.nombre_archivo)
     ctx = contexto_mod.construir_contexto(importacion.finca, datos)
-    resultado = validadores.validar(datos, ctx, importacion.modo)
+    resultado = validadores.validar(
+        datos, ctx, importacion.modo, _opciones_de(importacion)
+    )
     return datos, ctx, resultado
 
 
-def previsualizar(finca, usuario, archivo, modo, modo_estricto):
+def previsualizar(finca, usuario, archivo, modo, modo_estricto, opciones=None):
     """Crea la importación, valida y devuelve el resumen de previsualización."""
+    opciones = opciones or constantes.Opciones()
     importacion = ImportacionGanadera.objects.create(
         finca=finca,
         archivo_original=archivo,
         nombre_archivo=getattr(archivo, "name", "archivo"),
         modo=modo,
         modo_estricto=modo_estricto,
+        crear_razas=opciones.crear_razas,
+        crear_categorias=opciones.crear_categorias,
+        crear_parcelas=opciones.crear_parcelas,
         creado_por=usuario,
         estado=ImportacionGanadera.Estado.VALIDANDO,
     )
@@ -75,12 +94,16 @@ def previsualizar(finca, usuario, archivo, modo, modo_estricto):
     errores = resultado["errores"]
     total_filas = _contar_filas(datos)
     filas_validas = sum(r["resumen"]["validas"] for r in resultado["hojas"].values())
+    catalogos_nuevos = resultado.get("catalogos_nuevos", {})
+    mapeo = _mapeo_por_hoja(datos)
 
     _guardar_errores(importacion, errores)
 
     resumen = {
         "por_hoja": _resumen_por_hoja(resultado),
         "muestra_errores": errores[:50],
+        "catalogos_nuevos": catalogos_nuevos,
+        "mapeo": mapeo,
     }
     importacion.total_filas = total_filas
     importacion.filas_validas = filas_validas
@@ -97,11 +120,16 @@ def previsualizar(finca, usuario, archivo, modo, modo_estricto):
         "estado": importacion.estado,
         "modo": modo,
         "modo_estricto": modo_estricto,
+        "crear_razas": opciones.crear_razas,
+        "crear_categorias": opciones.crear_categorias,
+        "crear_parcelas": opciones.crear_parcelas,
         "total_filas": total_filas,
         "filas_validas": filas_validas,
         "total_errores": len(errores),
         "por_hoja": resumen["por_hoja"],
         "muestra_errores": errores[:50],
+        "catalogos_nuevos": catalogos_nuevos,
+        "mapeo": mapeo,
     }
 
 
@@ -152,7 +180,8 @@ def confirmar(importacion):
 
     try:
         contadores = importador.procesar(
-            importacion.finca, importacion.creado_por, resultado, ctx, importacion.modo
+            importacion.finca, importacion.creado_por, resultado, ctx,
+            importacion.modo, _opciones_de(importacion),
         )
     except Exception as exc:  # rollback automático por @transaction.atomic
         importacion.estado = ImportacionGanadera.Estado.FALLIDO

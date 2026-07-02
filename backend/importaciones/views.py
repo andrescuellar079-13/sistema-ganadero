@@ -32,6 +32,11 @@ def _json_error(mensaje, status=400):
     return JsonResponse({"ok": False, "mensaje": mensaje}, status=status)
 
 
+def _flag(request, nombre):
+    """Lee un booleano del form ('true'/'1'/'on' = verdadero)."""
+    return str(request.POST.get(nombre, "")).strip().lower() in ("true", "1", "on", "yes")
+
+
 def _autenticar(request):
     return usuario_desde_request(request)
 
@@ -70,6 +75,11 @@ def previsualizar(request):
     finca_id = request.POST.get("finca_id")
     modo = request.POST.get("modo", constantes.MODO_SOLO_CREAR)
     modo_estricto = request.POST.get("modo_estricto", "true").lower() != "false"
+    opciones = constantes.Opciones(
+        crear_razas=_flag(request, "crear_razas"),
+        crear_categorias=_flag(request, "crear_categorias"),
+        crear_parcelas=_flag(request, "crear_parcelas"),
+    )
     archivo = request.FILES.get("archivo")
 
     if not finca_id:
@@ -92,7 +102,9 @@ def previsualizar(request):
     if not puede_administrar_finca(usuario, finca_id):
         return _json_error("No tiene permiso para importar en esta finca.", status=403)
 
-    resultado = servicios.previsualizar(finca, usuario, archivo, modo, modo_estricto)
+    resultado = servicios.previsualizar(
+        finca, usuario, archivo, modo, modo_estricto, opciones
+    )
     status = 200 if resultado.get("ok") else 400
     return JsonResponse(resultado, status=status)
 

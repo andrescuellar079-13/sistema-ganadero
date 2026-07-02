@@ -15,7 +15,7 @@ from produccion.models import RegistroPeso
 
 from importaciones import constantes, servicios
 from importaciones.models import ImportacionGanadera
-from .factories import construir_xlsx, media_temporal
+from .factories import construir_xlsx, construir_xlsx_crudo, media_temporal
 
 MEDIA = media_temporal()
 
@@ -23,6 +23,13 @@ MEDIA = media_temporal()
 def _archivo(hojas, nombre="datos.xlsx"):
     return SimpleUploadedFile(
         nombre, construir_xlsx(hojas),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+def _archivo_crudo(hojas, nombre="datos.xlsx"):
+    return SimpleUploadedFile(
+        nombre, construir_xlsx_crudo(hojas),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -203,3 +210,94 @@ class TestImportacionMasiva(BaseImport):
         self.assertEqual(animal.raza, self.raza)
         self.assertEqual(animal.categoria, self.categoria)
         self.assertEqual(str(animal.peso), "412.50")
+
+    def test_11_alias_y_acentos_en_encabezados(self):
+        """Encabezados alternativos/acentuados se mapean a las keys canónicas."""
+        archivo = _archivo_crudo({
+            constantes.HOJA_ANIMALES: {
+                "headers": ["Número de Arete", "Sexo", "Peso", "Parcela",
+                            "Fecha de Ingreso", "Observación"],
+                "filas": [["AR-77", "MACHO", "350,5", "", "01/01/2023", "ok"]],
+            },
+        })
+        prev = servicios.previsualizar(
+            self.finca, self.user, archivo, constantes.MODO_SOLO_CREAR, False
+        )
+        imp = ImportacionGanadera.objects.get(id=prev["importacion_id"])
+        res = servicios.confirmar(imp)
+        self.assertTrue(res["ok"], res)
+        animal = Animal.objects.get(nro_arete="AR-77")
+        self.assertEqual(animal.sexo, "MACHO")
+        self.assertEqual(str(animal.peso), "350.50")
+
+    def test_12_columna_no_reconocida_en_mapeo(self):
+        archivo = _archivo_crudo({
+            constantes.HOJA_ANIMALES: {
+                "headers": ["arete", "sexo", "columna_rara"],
+                "filas": [["AR-1", "MACHO", "x"]],
+            },
+        })
+        prev = servicios.previsualizar(
+            self.finca, self.user, archivo, constantes.MODO_SOLO_CREAR, False
+        )
+        mapeo = prev["mapeo"][constantes.HOJA_ANIMALES]
+        por_columna = {m["columna"]: m["key"] for m in mapeo}
+        self.assertEqual(por_columna["arete"], "nro_arete")
+        self.assertIsNone(por_columna["columna_rara"])
+
+    def test_13_raza_inexistente_sin_opcion_es_error_pero_se_detecta(self):
+        prev = self.previsualizar({constantes.HOJA_ANIMALES: [
+            {"nro_arete": "AR-1", "sexo": "MACHO", "raza": "Nelore"},
+        ]})
+        self.assertIn("RAZA_NO_EXISTE",
+                      {e["codigo_error"] for e in prev["muestra_errores"]})
+        # Se detecta como nueva aunque NO se vaya a crear (para informar al usuario).
+        self.assertEqual(prev["catalogos_nuevos"]["razas"], ["Nelore"])
+
+    def test_14_detectar_y_crear_catalogos_nuevos(self):
+        opciones = constantes.Opciones(
+            crear_razas=True, crear_categorias=True, crear_parcelas=True
+        )
+        archivo = _archivo({constantes.HOJA_ANIMALES: [
+            {"nro_arete": "AR-1", "sexo": "MACHO", "raza": "Nelore",
+             "categoria": "Ternero", "parcela_actual": "Lote 5"},
+        ]})
+        prev = servicios.previsualizar(
+            self.finca, self.user, archivo, constantes.MODO_SOLO_CREAR, False, opciones
+        )
+        self.assertEqual(prev["total_errores"], 0, prev["muestra_errores"])
+        nuevos = prev["catalogos_nuevos"]
+        self.assertEqual(nuevos["razas"], ["Nelore"])
+        self.assertEqual(nuevos["categorias"], ["Ternero"])
+        self.assertEqual(nuevos["parcelas"], ["Lote 5"])
+
+        imp = ImportacionGanadera.objects.get(id=prev["importacion_id"])
+        res = servicios.confirmar(imp)
+        self.assertTrue(res["ok"], res)
+        animal = Animal.objects.get(nro_arete="AR-1")
+        self.assertEqual(animal.raza.nombre, "Nelore")
+        self.assertEqual(animal.categoria.nombre, "Ternero")
+        self.assertTrue(Raza.objects.filter(nombre="Nelore").exists())
+        self.assertTrue(CategoriaAnimal.objects.filter(nombre="Ternero").exists())
+        self.assertTrue(
+            Parcela.objects.filter(finca=self.finca, nombre="Lote 5").exists()
+        )
+        self.assertEqual(res["contadores"]["razas_creadas"], 1)
+        self.assertEqual(res["contadores"]["parcelas_creadas"], 1)
+        self.assertEqual(
+            AnimalParcela.objects.filter(animal=animal, fecha_salida__isnull=True).count(), 1
+        )
+
+    def test_15_catalogo_nuevo_repetido_no_se_duplica(self):
+        opciones = constantes.Opciones(crear_razas=True)
+        archivo = _archivo({constantes.HOJA_ANIMALES: [
+            {"nro_arete": "AR-1", "sexo": "MACHO", "raza": "Angus"},
+            {"nro_arete": "AR-2", "sexo": "HEMBRA", "raza": "angus"},
+        ]})
+        prev = servicios.previsualizar(
+            self.finca, self.user, archivo, constantes.MODO_SOLO_CREAR, False, opciones
+        )
+        self.assertEqual(prev["catalogos_nuevos"]["razas"], ["Angus"])
+        imp = ImportacionGanadera.objects.get(id=prev["importacion_id"])
+        servicios.confirmar(imp)
+        self.assertEqual(Raza.objects.filter(nombre__iexact="Angus").count(), 1)

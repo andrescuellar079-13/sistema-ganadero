@@ -124,8 +124,28 @@ export const GET_ANIMAL_DETALLE = gql`
       tipoProduccion
       color
       observaciones
+      edadMeses
+      gananciaDiariaActual
+      estadoReproductivo
+      proximoParto
+      diasAbiertos
+      cantidadDescendencia
+      promedioPesoHijos
+      promedioProduccionHijos
       raza { id nombre }
       categoria { id nombre }
+      parcelaActual { id nombre estado }
+      ultimoPesaje {
+        id fechaPesaje pesoKg gananciaDiaria condicionCorporal
+      }
+      engordeActivo {
+        id fechaInicio pesoInicial pesoObjetivo tipoEngorde loteGrupo estado
+        pesoActual diasEnEngorde gananciaDiaria pesoFaltante ultimoPesajeFecha
+      }
+      alertasActivas {
+        id tipo mensaje fechaAlerta prioridad estado moduloOrigen
+        fechaVencimiento accionRecomendada diasRestantes vencida
+      }
       padre {
         id nroArete nombre sexo estado
         raza { nombre }
@@ -148,6 +168,10 @@ export const GET_ANIMAL_DETALLE = gql`
       produccionesLeche {
         id fecha turno litros
       }
+      engordes {
+        id fechaInicio pesoInicial pesoObjetivo tipoEngorde loteGrupo estado
+        pesoActual diasEnEngorde gananciaDiaria pesoFaltante ultimoPesajeFecha
+      }
       inseminaciones {
         id fecha resultado fechaProbableParto numeroServicio
         reproductor { id codigo nombre tipoOrigen }
@@ -159,6 +183,21 @@ export const GET_ANIMAL_DETALLE = gql`
         id fechaPartoReal tipoParto numCrias estado
         crias { id nroArete nombre sexo }
       }
+      celos {
+        id fechaInicio fechaFin tipo intensidad detectadoPor duracionHoras observaciones
+      }
+      montas {
+        id fecha resultado fechaProbableParto numeroServicio duracionDias
+        reproductor { id codigo nombre tipoOrigen }
+      }
+      palpaciones {
+        id fecha resultado diasGestacionEstimados observaciones
+        veterinario { nombre apellidos }
+      }
+      destetes {
+        id fechaDestete tipo edadDesteteDias pesoCria estadoCria
+        cria { id nroArete nombre sexo }
+      }
       vacunaciones {
         id fechaAplicacion dosisAplicada fechaProxima
         vacuna { nombre }
@@ -168,6 +207,25 @@ export const GET_ANIMAL_DETALLE = gql`
         id fechaInicio fechaFin diagnostico enTratamiento
         medicamento { nombre }
         veterinario { nombre apellidos }
+      }
+      diagnosticosSanitarios {
+        id fecha descripcion resultado
+        veterinario { nombre apellidos }
+        enfermedad { nombre }
+      }
+      examenes {
+        id tipoExamen laboratorio fechaToma fechaResultado resultado esNormal observaciones
+      }
+      mastitis {
+        id fecha cuartoAfectado tipo bacteria recuentoCelsSomaticas seCuro fechaCuracion
+      }
+      desparasitaciones {
+        id fecha tipoParasiticida producto dosis fechaProxima
+        veterinario { nombre apellidos }
+      }
+      tiemposRetiro {
+        id tipoRetiro fechaInicio fechaFin diasRetiro activo diasRestantes estaEnRetiro
+        tratamiento { id diagnostico }
       }
       movimientosParcela {
         id fechaIngreso fechaSalida

@@ -53,6 +53,52 @@ def _get_detalle_transferencia_type():
     from fincas.schema import DetalleTransferenciaType
     return DetalleTransferenciaType
 
+# --- Tipos reutilizados para la hoja de vida (ficha integral del animal) ---
+
+def _get_engorde_type():
+    from produccion.schema import EngordeAnimalType
+    return EngordeAnimalType
+
+def _get_celo_type():
+    from reproduccion.schema import CeloType
+    return CeloType
+
+def _get_monta_type():
+    from reproduccion.schema import MontaNaturalType
+    return MontaNaturalType
+
+def _get_palpacion_type():
+    from reproduccion.schema import PalpacionType
+    return PalpacionType
+
+def _get_destete_type():
+    from reproduccion.schema import DesteteType
+    return DesteteType
+
+def _get_diagnostico_sanitario_type():
+    from sanidad.schema import DiagnosticoType
+    return DiagnosticoType
+
+def _get_examen_type():
+    from sanidad.schema import ExamenLaboratorioType
+    return ExamenLaboratorioType
+
+def _get_mastitis_type():
+    from sanidad.schema import RegistroMastitisType
+    return RegistroMastitisType
+
+def _get_desparasitacion_type():
+    from sanidad.schema import DesparasitacionType
+    return DesparasitacionType
+
+def _get_tiempo_retiro_type():
+    from sanidad.schema import TiempoRetiroType
+    return TiempoRetiroType
+
+def _get_alerta_type():
+    from alertas.schema import AlertaType
+    return AlertaType
+
 
 # ==========================================
 # TYPES
@@ -86,12 +132,24 @@ class AnimalType(DjangoObjectType):
     lactancias = graphene.List(lambda: _get_lactancia_type())
     producciones_leche = graphene.List(lambda: _get_produccion_leche_type())
 
+    engordes = graphene.List(lambda: _get_engorde_type())
+    engorde_activo = graphene.Field(lambda: _get_engorde_type())
+
     inseminaciones = graphene.List(lambda: _get_inseminacion_type())
     diagnosticos_prenez = graphene.List(lambda: _get_diagnostico_prenez_type())
     partos = graphene.List(lambda: _get_reproduccion_type())
+    celos = graphene.List(lambda: _get_celo_type())
+    montas = graphene.List(lambda: _get_monta_type())
+    palpaciones = graphene.List(lambda: _get_palpacion_type())
+    destetes = graphene.List(lambda: _get_destete_type())
 
     vacunaciones = graphene.List(lambda: _get_vacunacion_type())
     tratamientos = graphene.List(lambda: _get_tratamiento_type())
+    diagnosticos_sanitarios = graphene.List(lambda: _get_diagnostico_sanitario_type())
+    examenes = graphene.List(lambda: _get_examen_type())
+    mastitis = graphene.List(lambda: _get_mastitis_type())
+    desparasitaciones = graphene.List(lambda: _get_desparasitacion_type())
+    tiempos_retiro = graphene.List(lambda: _get_tiempo_retiro_type())
 
     movimientos_parcela = graphene.List(lambda: AnimalParcelaType)
 
@@ -100,6 +158,20 @@ class AnimalType(DjangoObjectType):
 
     movimientos = graphene.List(lambda: MovimientoAnimalType)
     transferencias_animal = graphene.List(lambda: _get_detalle_transferencia_type())
+
+    alertas_activas = graphene.List(lambda: _get_alerta_type())
+
+    # --- Campos calculados para tarjetas resumen y resumen por pestaña ---
+    edad_meses = graphene.Int()
+    parcela_actual = graphene.Field(lambda: ParcelaType)
+    ultimo_pesaje = graphene.Field(lambda: _get_registro_peso_type())
+    ganancia_diaria_actual = graphene.Decimal()
+    estado_reproductivo = graphene.String()
+    proximo_parto = graphene.Date()
+    dias_abiertos = graphene.Int()
+    cantidad_descendencia = graphene.Int()
+    promedio_peso_hijos = graphene.Decimal()
+    promedio_produccion_hijos = graphene.Decimal()
 
     class Meta:
         model = Animal
@@ -171,6 +243,158 @@ class AnimalType(DjangoObjectType):
             'parcela_origen',
             'parcela_destino',
         ).order_by('-transferencia__fecha_transferencia')
+
+    # ----- Producción / Engorde -----
+
+    def resolve_engordes(self, info):
+        return self.engordes.all().order_by('-fecha_inicio')
+
+    def resolve_engorde_activo(self, info):
+        return self.engordes.filter(
+            estado__in=['EN_ENGORDE', 'LISTO_VENTA']
+        ).order_by('-fecha_inicio').first()
+
+    def resolve_ultimo_pesaje(self, info):
+        return self.registros_peso.all().order_by('-fecha_pesaje', '-fecha_registro').first()
+
+    def resolve_ganancia_diaria_actual(self, info):
+        ultimo = self.registros_peso.all().order_by('-fecha_pesaje', '-fecha_registro').first()
+        return ultimo.ganancia_diaria if ultimo else None
+
+    # ----- Reproducción -----
+
+    def resolve_celos(self, info):
+        return self.celos.all().order_by('-fecha_inicio')[:50]
+
+    def resolve_montas(self, info):
+        return self.montanatural_eventos_reproductivos.all().select_related(
+            'reproductor'
+        ).order_by('-fecha')[:50]
+
+    def resolve_palpaciones(self, info):
+        return self.palpaciones.all().select_related(
+            'veterinario'
+        ).order_by('-fecha')[:50]
+
+    def resolve_destetes(self, info):
+        return self.destetes_como_madre.all().select_related(
+            'cria'
+        ).order_by('-fecha_destete')[:50]
+
+    def resolve_estado_reproductivo(self, info):
+        if self.sexo == 'MACHO':
+            return None
+        ultima = self.reproducciones_como_madre.all().order_by(
+            '-fecha_servicio', '-fecha_parto_real'
+        ).first()
+        if ultima:
+            return ultima.estado
+        # Sin reproducciones: derivar de inseminaciones/diagnósticos
+        diag = self.diagnosticoprenez_eventos_reproductivos.all().order_by('-fecha').first()
+        if diag and diag.resultado_prenez == 'POSITIVO':
+            return 'PRENADA'
+        return 'VACIA'
+
+    def resolve_proximo_parto(self, info):
+        if self.sexo == 'MACHO':
+            return None
+        hoy = date.today()
+        rep = self.reproducciones_como_madre.filter(
+            estado='PRENADA',
+            fecha_parto_esperado__gte=hoy,
+        ).order_by('fecha_parto_esperado').first()
+        if rep:
+            return rep.fecha_parto_esperado
+        # Respaldo: diagnóstico positivo con fecha probable de parto futura
+        diag = self.diagnosticoprenez_eventos_reproductivos.filter(
+            resultado_prenez='POSITIVO',
+            fecha_probable_parto__gte=hoy,
+        ).order_by('fecha_probable_parto').first()
+        return diag.fecha_probable_parto if diag else None
+
+    def resolve_dias_abiertos(self, info):
+        if self.sexo == 'MACHO':
+            return None
+        ultimo_parto = self.reproducciones_como_madre.filter(
+            fecha_parto_real__isnull=False
+        ).order_by('-fecha_parto_real').first()
+        if not ultimo_parto or not ultimo_parto.fecha_parto_real:
+            return None
+        servicio = self.reproducciones_como_madre.filter(
+            estado='PRENADA',
+            fecha_servicio__gt=ultimo_parto.fecha_parto_real,
+        ).order_by('fecha_servicio').first()
+        if servicio and servicio.fecha_servicio:
+            return (servicio.fecha_servicio - ultimo_parto.fecha_parto_real).days
+        return (date.today() - ultimo_parto.fecha_parto_real).days
+
+    # ----- Sanidad -----
+
+    def resolve_diagnosticos_sanitarios(self, info):
+        return self.diagnosticos.all().select_related(
+            'veterinario', 'enfermedad'
+        ).order_by('-fecha')[:50]
+
+    def resolve_examenes(self, info):
+        return self.examenes_laboratorio.all().order_by('-fecha_toma')[:50]
+
+    def resolve_mastitis(self, info):
+        return self.mastitis_registros.all().select_related(
+            'tratamiento'
+        ).order_by('-fecha')[:50]
+
+    def resolve_desparasitaciones(self, info):
+        return self.desparasitacion_eventos_sanitarios.all().select_related(
+            'veterinario'
+        ).order_by('-fecha')[:50]
+
+    def resolve_tiempos_retiro(self, info):
+        return self.tiempos_retiro.all().select_related(
+            'tratamiento'
+        ).order_by('-fecha_inicio')[:50]
+
+    # ----- Alertas activas -----
+
+    def resolve_alertas_activas(self, info):
+        return self.alertas.filter(
+            estado__in=['PENDIENTE', 'LEIDA', 'EN_PROCESO']
+        ).order_by('-fecha_alerta')
+
+    # ----- Calculados generales / genealogía -----
+
+    def resolve_edad_meses(self, info):
+        if not self.fecha_nacimiento:
+            return None
+        return (date.today() - self.fecha_nacimiento).days // 30
+
+    def resolve_parcela_actual(self, info):
+        asignacion = self.historial_parcelas.filter(
+            fecha_salida__isnull=True
+        ).select_related('parcela').order_by('-fecha_ingreso').first()
+        return asignacion.parcela if asignacion else None
+
+    def resolve_cantidad_descendencia(self, info):
+        from django.db.models import Q
+        return Animal.objects.filter(
+            Q(padre_id=self.id) | Q(madre_id=self.id)
+        ).count()
+
+    def resolve_promedio_peso_hijos(self, info):
+        from django.db.models import Q, Avg
+        agg = Animal.objects.filter(
+            Q(padre_id=self.id) | Q(madre_id=self.id),
+            peso__isnull=False,
+        ).aggregate(prom=Avg('peso'))
+        return agg['prom']
+
+    def resolve_promedio_produccion_hijos(self, info):
+        from django.db.models import Q, Avg
+        from produccion.models import Lactancia
+        agg = Lactancia.objects.filter(
+            Q(vaca__padre_id=self.id) | Q(vaca__madre_id=self.id),
+            promedio_diario__isnull=False,
+        ).aggregate(prom=Avg('promedio_diario'))
+        return agg['prom']
 
 
 class ParcelaType(DjangoObjectType):
@@ -594,6 +818,25 @@ class Query(graphene.ObjectType):
             'tratamiento_eventos_sanitarios',
             'tratamiento_eventos_sanitarios__medicamento',
             'tratamiento_eventos_sanitarios__veterinario',
+            'engordes',
+            'celos',
+            'montanatural_eventos_reproductivos',
+            'montanatural_eventos_reproductivos__reproductor',
+            'palpaciones',
+            'palpaciones__veterinario',
+            'destetes_como_madre',
+            'destetes_como_madre__cria',
+            'diagnosticos',
+            'diagnosticos__veterinario',
+            'diagnosticos__enfermedad',
+            'examenes_laboratorio',
+            'mastitis_registros',
+            'mastitis_registros__tratamiento',
+            'desparasitacion_eventos_sanitarios',
+            'desparasitacion_eventos_sanitarios__veterinario',
+            'tiempos_retiro',
+            'tiempos_retiro__tratamiento',
+            'alertas',
             'historial_parcelas',
             'historial_parcelas__parcela',
             'detalles_venta',

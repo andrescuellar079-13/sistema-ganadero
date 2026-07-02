@@ -10,6 +10,7 @@ Fase 1 cubre las hojas ANIMALES, PARCELAS y PESOS. Las demás hojas del spec
 PRODUCCION_LECHE, VENTAS, BAJAS) se añaden agregando una entrada a ``HOJAS``
 con la misma estructura: el resto de la infraestructura las toma sin cambios.
 """
+import unicodedata
 
 # --- Choices (espejo de los modelos, evita import circular en validación) ---
 SEXO_CHOICES = ["MACHO", "HEMBRA"]
@@ -24,6 +25,22 @@ MODO_CREAR_O_ACTUALIZAR = "CREAR_O_ACTUALIZAR"
 MODOS_VALIDOS = [MODO_SOLO_CREAR, MODO_ACTUALIZAR, MODO_CREAR_O_ACTUALIZAR]
 
 
+class Opciones:
+    """Opciones de creación automática de catálogos durante la importación.
+
+    Por defecto NO se crea nada: un nombre de raza/categoría/parcela que no
+    existe se reporta como error (compatibilidad con el flujo histórico). Al
+    activar la opción correspondiente, esos nombres se detectan como "nuevos"
+    y el importador los crea en la pasada de catálogos.
+    """
+
+    def __init__(self, crear_razas=False, crear_categorias=False,
+                 crear_parcelas=False):
+        self.crear_razas = bool(crear_razas)
+        self.crear_categorias = bool(crear_categorias)
+        self.crear_parcelas = bool(crear_parcelas)
+
+
 # Tipos de columna soportados por el normalizador/validador.
 TIPO_TEXTO = "texto"
 TIPO_ENTERO = "entero"
@@ -34,7 +51,7 @@ TIPO_REFERENCIA = "referencia"  # nombre/arete que se resuelve contra BD o archi
 
 
 def col(key, header, tipo=TIPO_TEXTO, requerido=False, choices=None,
-        default=None, ejemplo="", ayuda="", min_valor=None):
+        default=None, ejemplo="", ayuda="", min_valor=None, alias=None):
     return {
         "key": key,
         "header": header,
@@ -45,6 +62,10 @@ def col(key, header, tipo=TIPO_TEXTO, requerido=False, choices=None,
         "ejemplo": ejemplo,
         "ayuda": ayuda,
         "min_valor": min_valor,
+        # Encabezados alternativos aceptados además de ``header`` (el matching
+        # es insensible a mayúsculas, acentos y separadores; ver
+        # ``normalizar_encabezado``).
+        "alias": alias or [],
     }
 
 
@@ -59,6 +80,7 @@ HOJAS = {
                        "los animales para poder ubicarlos.",
         "columnas": [
             col("nombre", "nombre", requerido=True, ejemplo="Potrero Norte",
+                alias=["parcela", "potrero", "nombre parcela"],
                 ayuda="Nombre único de la parcela dentro de la finca."),
             col("estado", "estado", default="ACTIVA", ejemplo="ACTIVA"),
             col("tamano", "tamano_ha", tipo=TIPO_DECIMAL, default=0, ejemplo="12.5",
@@ -73,37 +95,55 @@ HOJAS = {
                        "usada por las demás hojas.",
         "columnas": [
             col("nro_arete", "nro_arete", requerido=True, ejemplo="AR-0001",
+                alias=["arete", "nro arete", "numero de arete", "número de arete",
+                       "n arete", "codigo", "código", "codigo animal",
+                       "código animal", "identificacion", "identificación"],
                 ayuda="Identificador único global del animal. Obligatorio."),
-            col("nombre", "nombre", ejemplo="Lucero"),
+            col("nombre", "nombre", ejemplo="Lucero",
+                alias=["nombre animal", "nombre del animal"]),
             col("sexo", "sexo", tipo=TIPO_CHOICE, requerido=True,
                 choices=SEXO_CHOICES, ejemplo="HEMBRA"),
             col("raza", "raza", tipo=TIPO_REFERENCIA, ejemplo="Brahman",
-                ayuda="Nombre de una raza ya existente en el catálogo."),
+                alias=["nombre raza"],
+                ayuda="Nombre de la raza. Si no existe puede crearse según las opciones."),
             col("categoria", "categoria", tipo=TIPO_REFERENCIA, ejemplo="Vaca",
-                ayuda="Nombre de una categoría ya existente en el catálogo."),
+                alias=["categoría", "nombre categoria"],
+                ayuda="Nombre de la categoría. Si no existe puede crearse según las opciones."),
             col("padre_arete", "padre_arete", tipo=TIPO_REFERENCIA, ejemplo="AR-0100",
+                alias=["padre", "arete padre", "padre nro arete"],
                 ayuda="Arete del padre (MACHO). Puede estar en este mismo archivo."),
             col("madre_arete", "madre_arete", tipo=TIPO_REFERENCIA, ejemplo="AR-0200",
+                alias=["madre", "arete madre", "madre nro arete"],
                 ayuda="Arete de la madre (HEMBRA). Puede estar en este mismo archivo."),
             col("fecha_nacimiento", "fecha_nacimiento", tipo=TIPO_FECHA,
+                alias=["nacimiento", "fecha nac", "f nacimiento"],
                 ejemplo="15/03/2022"),
-            col("fecha_ingreso", "fecha_ingreso", tipo=TIPO_FECHA, ejemplo="01/01/2023"),
+            col("fecha_ingreso", "fecha_ingreso", tipo=TIPO_FECHA, ejemplo="01/01/2023",
+                alias=["ingreso", "fecha de ingreso", "f ingreso"]),
             col("peso", "peso_kg", tipo=TIPO_DECIMAL, default=0, ejemplo="380.5",
-                min_valor=0),
+                min_valor=0, alias=["peso", "peso actual", "peso kg"]),
             col("peso_nacimiento", "peso_nacimiento_kg", tipo=TIPO_DECIMAL, default=0,
-                ejemplo="32", min_valor=0),
+                ejemplo="32", min_valor=0,
+                alias=["peso nacimiento", "peso al nacer", "peso al nacimiento"]),
             col("estado", "estado", tipo=TIPO_CHOICE, choices=ESTADO_ANIMAL_CHOICES,
                 default="ACTIVO", ejemplo="ACTIVO"),
             col("tipo_produccion", "tipo_produccion", tipo=TIPO_CHOICE,
                 choices=TIPO_PRODUCCION_CHOICES, default="DOBLE_PROPOSITO",
-                ejemplo="DOBLE_PROPOSITO"),
+                ejemplo="DOBLE_PROPOSITO",
+                alias=["produccion", "producción", "tipo produccion",
+                       "tipo de produccion", "tipo producción"]),
             col("origen", "origen", tipo=TIPO_CHOICE, choices=ORIGEN_CHOICES,
-                default="NACIDO_FINCA", ejemplo="NACIDO_FINCA"),
-            col("color", "color", ejemplo="Blanco"),
+                default="NACIDO_FINCA", ejemplo="NACIDO_FINCA",
+                alias=["procedencia"]),
+            col("color", "color", ejemplo="Blanco", alias=["capa", "pelaje"]),
             col("parcela_actual", "parcela_actual", tipo=TIPO_REFERENCIA,
                 ejemplo="Potrero Norte",
-                ayuda="Parcela donde está el animal. Debe existir o venir en la hoja PARCELAS."),
-            col("observaciones", "observaciones", ejemplo=""),
+                alias=["parcela", "potrero", "ubicacion", "ubicación",
+                       "parcela actual"],
+                ayuda="Parcela donde está el animal. Debe existir, venir en la hoja "
+                      "PARCELAS o crearse según las opciones."),
+            col("observaciones", "observaciones", ejemplo="",
+                alias=["observacion", "observación", "notas", "comentarios"]),
         ],
     },
     HOJA_PESOS: {
@@ -112,9 +152,10 @@ HOJAS = {
         "columnas": [
             col("nro_arete", "nro_arete", tipo=TIPO_REFERENCIA, requerido=True,
                 ejemplo="AR-0001",
+                alias=["arete", "nro arete", "codigo", "identificacion"],
                 ayuda="Arete de un animal existente o creado en la hoja ANIMALES."),
             col("fecha_pesaje", "fecha_pesaje", tipo=TIPO_FECHA, requerido=True,
-                ejemplo="01/06/2024"),
+                ejemplo="01/06/2024", alias=["fecha", "fecha de pesaje"]),
             col("peso_kg", "peso_kg", tipo=TIPO_DECIMAL, requerido=True, ejemplo="395.0",
                 min_valor=0),
             col("condicion_corporal", "condicion_corporal", tipo=TIPO_DECIMAL,
@@ -136,8 +177,36 @@ def headers(hoja):
     return [c["header"] for c in columnas(hoja)]
 
 
+_SEPARADORES = (" ", "_", "-", ".", "/", "\t", "\n")
+
+
+def normalizar_encabezado(texto):
+    """Clave canónica de un encabezado para el matching tolerante.
+
+    Quita acentos, pasa a minúsculas y elimina separadores comunes para que
+    ``"Número de Arete"``, ``"nro_arete"`` y ``"NRO ARETE"`` coincidan todos.
+    """
+    if texto is None:
+        return ""
+    base = unicodedata.normalize("NFKD", str(texto))
+    base = "".join(c for c in base if not unicodedata.combining(c))
+    base = base.strip().lower()
+    for sep in _SEPARADORES:
+        base = base.replace(sep, "")
+    return base
+
+
 def header_a_key(hoja):
-    return {c["header"].strip().lower(): c["key"] for c in columnas(hoja)}
+    """Mapa ``encabezado_normalizado -> key`` incluyendo header y alias.
+
+    El header canónico tiene prioridad sobre los alias si dos columnas
+    normalizan igual (no debería ocurrir, pero el header gana por orden).
+    """
+    mapa = {}
+    for c in columnas(hoja):
+        for etiqueta in [*c.get("alias", []), c["header"]]:
+            mapa[normalizar_encabezado(etiqueta)] = c["key"]
+    return mapa
 
 
 def columnas_requeridas(hoja):

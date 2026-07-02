@@ -38,12 +38,18 @@ export async function descargarPlantilla() {
   saveAs(blob, 'plantilla_importacion_ganadera.xlsx')
 }
 
-// Paso 5 — subir archivo y previsualizar.
-export async function previsualizar({ fincaId, archivo, modo, modoEstricto }) {
+// Subir archivo y previsualizar (validación + mapeo + catálogos nuevos).
+export async function previsualizar({
+  fincaId, archivo, modo, modoEstricto,
+  crearRazas = false, crearCategorias = false, crearParcelas = false,
+}) {
   const form = new FormData()
   form.append('finca_id', String(fincaId))
   form.append('modo', modo)
   form.append('modo_estricto', modoEstricto ? 'true' : 'false')
+  form.append('crear_razas', crearRazas ? 'true' : 'false')
+  form.append('crear_categorias', crearCategorias ? 'true' : 'false')
+  form.append('crear_parcelas', crearParcelas ? 'true' : 'false')
   form.append('archivo', archivo)
 
   const resp = await fetch(`${BASE}/previsualizar/`, {

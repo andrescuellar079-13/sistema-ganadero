@@ -1,5 +1,12 @@
 // frontend/src/pages/AnimalesPage.jsx
-import { useState, useEffect } from 'react'
+import { useState }            from 'react'
+import { useApolloClient }      from '@apollo/client'
+import { GET_ANIMAL_DETALLE }   from '../graphql/animales'
+import {
+  buildAnimalReportData,
+  generarPDFAnimalCompleto,
+  generarExcelAnimalCompleto,
+} from '../services/fichaAnimalService'
 import { useAnimales }          from '../hooks/useAnimales'
 import { useAnimalesPaginados } from '../hooks/useAnimalesPaginados'
 import { useParcelas }          from '../hooks/useParcelas'
@@ -46,22 +53,9 @@ export default function AnimalesPage() {
   const { razas, categorias, crearAnimal, actualizarAnimal, eliminarAnimal } = useAnimales()
   const { parcelas, crearParcela, actualizarParcela, eliminarParcela, moverAnimalAParcela, sacarAnimalDeParcela, loading: loadingP } = useParcelas()
   const { fincaActual } = useFincas()
+  const apolloClient = useApolloClient()
 
   const fincaId = fincaActual?.id || null
-
-  useEffect(() => {
-    if (typeof window.jspdf === 'undefined') {
-      const script1 = document.createElement('script')
-      script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
-      script1.async = false
-      document.head.appendChild(script1)
-
-      const script2 = document.createElement('script')
-      script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js'
-      script2.async = false
-      document.head.appendChild(script2)
-    }
-  }, [])
 
   const {
     animales, total, paginas, paginaActual, tieneSiguiente, tieneAnterior,
@@ -116,6 +110,7 @@ export default function AnimalesPage() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportFormato, setExportFormato]     = useState('PDF')
   const [showImportModal, setShowImportModal] = useState(false)
+  const [exportando, setExportando]           = useState(null) // { id, formato }
 
   const notify = (r) => {
     setMessage({ type: r.success ? 'success' : 'error', text: r.message })
@@ -123,174 +118,52 @@ export default function AnimalesPage() {
   }
 
   // ==========================================
-  // FUNCIÓN PARA DESCARGAR PDF (SIN EMOJIS)
+  // EXPORTACIÓN INDIVIDUAL — FICHA COMPLETA (animalDetalle)
+  // Descarga la hoja de vida completa del animal (PDF / Excel) consultando
+  // animalDetalle(id). Solo lectura; no afecta al exportador masivo superior.
   // ==========================================
-  const handleImprimirAnimal = (animal, formato) => {
-    if (formato === 'PDF') {
-      try {
-        if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
-          alert('Las librerías de PDF se están cargando. Intenta nuevamente en unos segundos.')
-          return
-        }
+  const handleExportarAnimalIndividual = async (animalFila, formato) => {
+    const id = animalFila.id
+    if (exportando) return
+    setExportando({ id, formato })
+    setMessage({ type: 'info', text: 'Cargando datos del animal...' })
 
-        const { jsPDF } = window.jspdf
-        const doc = new jsPDF('p', 'mm', 'a4')
-        const pageWidth = doc.internal.pageSize.getWidth()
-        const pageHeight = doc.internal.pageSize.getHeight()
-        const margin = 15
+    try {
+      const { data } = await apolloClient.query({
+        query: GET_ANIMAL_DETALLE,
+        variables: { id },
+        fetchPolicy: 'network-only',
+      })
 
-        // CABECERA
-        doc.setFillColor(46, 125, 50)
-        doc.rect(margin, margin, 8, 8, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(14)
-        doc.text('🐄', margin + 12, margin + 7)
+      const animal = data?.animalDetalle
+      if (!animal) throw new Error('No se encontraron los datos del animal.')
 
-        doc.setFontSize(20)
-        doc.setTextColor(46, 125, 50)
-        doc.setFont('helvetica', 'bold')
-        doc.text('FICHA DEL ANIMAL', pageWidth / 2, margin + 8, { align: 'center' })
+      setMessage({
+        type: 'info',
+        text: formato === 'PDF' ? 'Generando PDF...' : 'Generando Excel...',
+      })
 
-        doc.setDrawColor(46, 125, 50)
-        doc.setLineWidth(0.5)
-        doc.line(margin, margin + 14, pageWidth - margin, margin + 14)
-
-        doc.setFontSize(9)
-        doc.setTextColor(100, 100, 100)
-        doc.setFont('helvetica', 'normal')
-        doc.text(document.title || 'Sistema Ganadero', pageWidth / 2, margin + 20, { align: 'center' })
-
-        // DATOS
-        const yStart = margin + 30
-        const col1 = margin + 10
-        const col2 = margin + 65
-
-        const drawRow = (y, label, value) => {
-          doc.setFontSize(10)
-          doc.setTextColor(46, 125, 50)
-          doc.setFont('helvetica', 'bold')
-          doc.text(label + ':', col1, y)
-          doc.setTextColor(50, 50, 50)
-          doc.setFont('helvetica', 'normal')
-          doc.text(String(value || '—'), col2, y)
-        }
-
-        let yPos = yStart
-
-        // IDENTIFICACION
-        doc.setFontSize(12)
-        doc.setTextColor(46, 125, 50)
-        doc.setFont('helvetica', 'bold')
-        doc.text('IDENTIFICACION', col1, yPos)
-        yPos += 8
-        doc.setDrawColor(200, 200, 200)
-        doc.setLineWidth(0.3)
-        doc.line(col1, yPos - 2, pageWidth - margin, yPos - 2)
-        yPos += 6
-
-        drawRow(yPos, 'Arete', animal.nroArete)
-        yPos += 8
-        drawRow(yPos, 'Nombre', animal.nombre || '—')
-        yPos += 8
-        drawRow(yPos, 'Sexo', animal.sexo === 'MACHO' ? 'Macho' : 'Hembra')
-        yPos += 8
-        drawRow(yPos, 'Raza', animal.raza?.nombre || '—')
-        yPos += 8
-        drawRow(yPos, 'Categoria', animal.categoria?.nombre || '—')
-        yPos += 12
-
-        // CARACTERISTICAS
-        doc.setFontSize(12)
-        doc.setTextColor(46, 125, 50)
-        doc.setFont('helvetica', 'bold')
-        doc.text('CARACTERISTICAS', col1, yPos)
-        yPos += 8
-        doc.setDrawColor(200, 200, 200)
-        doc.setLineWidth(0.3)
-        doc.line(col1, yPos - 2, pageWidth - margin, yPos - 2)
-        yPos += 6
-
-        drawRow(yPos, 'Peso', animal.peso ? `${animal.peso} kg` : '—')
-        yPos += 8
-        drawRow(yPos, 'Fecha Nacimiento', animal.fechaNacimiento ? animal.fechaNacimiento.split('-').reverse().join('/') : '—')
-        yPos += 8
-        drawRow(yPos, 'Produccion', animal.tipoProduccion || '—')
-        yPos += 8
-        drawRow(yPos, 'Origen', animal.origen || '—')
-        yPos += 8
-        drawRow(yPos, 'Estado', animal.estado || 'ACTIVO')
-        yPos += 8
-        drawRow(yPos, 'Fecha Registro', animal.fechaIngreso ? animal.fechaIngreso.split('-').reverse().join('/') : '—')
-        yPos += 12
-
-        // OBSERVACIONES
-        if (animal.observaciones) {
-          doc.setFontSize(12)
-          doc.setTextColor(46, 125, 50)
-          doc.setFont('helvetica', 'bold')
-          doc.text('OBSERVACIONES', col1, yPos)
-          yPos += 8
-          doc.setDrawColor(200, 200, 200)
-          doc.setLineWidth(0.3)
-          doc.line(col1, yPos - 2, pageWidth - margin, yPos - 2)
-          yPos += 6
-
-          doc.setFontSize(9)
-          doc.setTextColor(80, 80, 80)
-          doc.setFont('helvetica', 'normal')
-          const obsLines = doc.splitTextToSize(animal.observaciones || 'Sin observaciones', pageWidth - margin * 2 - 20)
-          obsLines.forEach(line => {
-            doc.text(line, col1, yPos)
-            yPos += 6
-          })
-        }
-
-        // PIE DE PAGINA
-        const footerY = pageHeight - 15
-        doc.setDrawColor(200, 200, 200)
-        doc.setLineWidth(0.3)
-        doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
-
-        doc.setFontSize(8)
-        doc.setTextColor(150, 150, 150)
-        doc.setFont('helvetica', 'normal')
-        doc.text(
-          `Reporte generado el ${new Date().toLocaleDateString('es-PY')} a las ${new Date().toLocaleTimeString('es-PY')}`,
-          pageWidth / 2,
-          footerY,
-          { align: 'center' }
-        )
-        doc.text(
-          `Ficha ID: ${animal.nroArete}`,
-          pageWidth - margin,
-          footerY,
-          { align: 'right' }
-        )
-
-        // BORDE
-        doc.setDrawColor(46, 125, 50)
-        doc.setLineWidth(0.5)
-        doc.rect(margin - 2, margin - 2, pageWidth - margin * 2 + 4, pageHeight - margin * 2 + 4, 'S')
-
-        doc.save(`ficha_${animal.nroArete}.pdf`)
-
-      } catch (error) {
-        console.error('Error generando PDF:', error)
-        alert('Error al generar el PDF. Verifica tu conexión a internet.')
+      const reportData = buildAnimalReportData(animal)
+      if (formato === 'PDF') {
+        generarPDFAnimalCompleto(reportData, animal)
+      } else {
+        generarExcelAnimalCompleto(reportData, animal)
       }
 
-    } else {
-      // Excel (CSV)
-      const csvContent = `Arete,Nombre,Sexo,Raza,Categoría,Peso (kg),Fecha Nacimiento,Producción,Origen,Estado,Fecha Registro\n"${animal.nroArete}","${animal.nombre || ''}","${animal.sexo === 'MACHO' ? 'Macho' : 'Hembra'}","${animal.raza?.nombre || ''}","${animal.categoria?.nombre || ''}","${animal.peso || 0}","${animal.fechaNacimiento || ''}","${animal.tipoProduccion || ''}","${animal.origen || ''}","${animal.estado || 'ACTIVO'}","${animal.fechaIngreso || ''}"`
-      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.href = url
-      link.setAttribute('download', `animal_${animal.nroArete}.csv`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      setMessage({
+        type: 'success',
+        text: `Ficha de #${animal.nroArete}${animal.nombre ? ' · ' + animal.nombre : ''} generada correctamente.`,
+      })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      console.error('Error generando la ficha individual:', error)
+      setMessage({
+        type: 'error',
+        text: 'No se pudo generar la ficha del animal. Intentá nuevamente.',
+      })
+      setTimeout(() => setMessage(null), 4000)
+    } finally {
+      setExportando(null)
     }
   }
 
@@ -571,23 +444,33 @@ export default function AnimalesPage() {
                               <DeleteOutlinedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Descargar PDF">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleImprimirAnimal(animal, 'PDF')}
-                            >
-                              <PictureAsPdfIcon fontSize="small" />
-                            </IconButton>
+                          <Tooltip title="Descargar ficha completa (PDF)">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                disabled={!!exportando}
+                                onClick={() => handleExportarAnimalIndividual(animal, 'PDF')}
+                              >
+                                {exportando?.id === animal.id && exportando?.formato === 'PDF'
+                                  ? <CircularProgress size={16} />
+                                  : <PictureAsPdfIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
                           </Tooltip>
-                          <Tooltip title="Exportar Excel">
-                            <IconButton
-                              size="small"
-                              color="success"
-                              onClick={() => handleImprimirAnimal(animal, 'EXCEL')}
-                            >
-                              <TableChartIcon fontSize="small" />
-                            </IconButton>
+                          <Tooltip title="Exportar ficha completa (Excel)">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="success"
+                                disabled={!!exportando}
+                                onClick={() => handleExportarAnimalIndividual(animal, 'EXCEL')}
+                              >
+                                {exportando?.id === animal.id && exportando?.formato === 'EXCEL'
+                                  ? <CircularProgress size={16} />
+                                  : <TableChartIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </TableCell>
                       </TableRow>
