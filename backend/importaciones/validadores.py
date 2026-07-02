@@ -33,7 +33,10 @@ def _normalizar_valor(col, raw):
     if tipo == constantes.TIPO_CHOICE:
         v, err = norm.normalizar_texto(raw)
         if v is not None:
-            v = v.upper().replace(" ", "_")
+            v = constantes.normalizar_choice(v)
+            # Sinónimo natural del usuario -> valor canónico del modelo
+            # ("NACIDO_EN_FINCA" -> "NACIDO_FINCA", "M" -> "MACHO", ...).
+            v = col.get("sinonimos", {}).get(v, v)
         return v, err
     if tipo == constantes.TIPO_DECIMAL:
         return norm.normalizar_decimal(raw)
@@ -90,9 +93,10 @@ def _normalizar_fila(hoja, valores):
         provistos.add(key)
 
         if col["tipo"] == constantes.TIPO_CHOICE and valor not in col["choices"]:
-            errores.append(
-                (key, raw, "CHOICE_INVALIDO", _msg("CHOICE_INVALIDO", col["header"], valor))
-            )
+            mensaje = _msg("CHOICE_INVALIDO", col["header"], raw)
+            if col.get("choices"):
+                mensaje += f" Valores válidos: {', '.join(col['choices'])}."
+            errores.append((key, raw, "CHOICE_INVALIDO", mensaje))
         if col.get("min_valor") is not None and valor is not None:
             try:
                 if valor < col["min_valor"]:
@@ -151,13 +155,17 @@ def validar(datos, contexto, modo, opciones=None):
 
     # Aretes presentes en la hoja ANIMALES (con su sexo) para resolver
     # padre/madre y validar pesos aunque el animal venga en el mismo archivo.
-    animales_archivo = {}   # arete -> sexo
+    # El sexo se canoniza igual que en la validación por celda (sinónimos +
+    # acentos) para que 'M'/'Toro' resuelvan a MACHO al comparar progenitores.
+    animales_archivo = {}   # arete -> sexo canónico
     if A in datos:
         for fila in datos[A]["filas"]:
             arete, _ = norm.normalizar_texto(fila["valores"].get("nro_arete"))
             sexo, _ = norm.normalizar_texto(fila["valores"].get("sexo"))
+            sexo = constantes.normalizar_choice(sexo) or "" if sexo else ""
+            sexo = constantes.SEXO_SINONIMOS.get(sexo, sexo)
             if arete:
-                animales_archivo[arete.strip()] = (sexo or "").strip().upper()
+                animales_archivo[arete.strip()] = sexo
 
     # --- PARCELAS ---
     if P in datos:

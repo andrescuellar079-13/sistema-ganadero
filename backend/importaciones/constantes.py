@@ -18,6 +18,38 @@ ESTADO_ANIMAL_CHOICES = ["ACTIVO", "VENDIDO", "MUERTO", "DESCARTE", "MATADERO", 
 TIPO_PRODUCCION_CHOICES = ["CARNE", "LECHE", "DOBLE_PROPOSITO"]
 ORIGEN_CHOICES = ["NACIDO_FINCA", "COMPRADO", "DONADO"]
 
+# --- Sinónimos por campo choice ----------------------------------------------
+# Mapa "forma normalizada del valor escrito por el usuario -> valor canónico
+# del modelo". La clave ya viene normalizada por ``normalizar_choice`` (mayús.,
+# sin acentos, separadores -> "_"), así que basta listar la variante en esa
+# forma. Hace la importación tolerante a variantes naturales: "Nacido en finca",
+# "M", "Doble propósito", "Activa", etc. Sin esto, cualquier valor que no sea
+# EXACTAMENTE el canónico se reporta como error.
+SEXO_SINONIMOS = {
+    "M": "MACHO", "MACHOS": "MACHO", "TORO": "MACHO", "TORETE": "MACHO",
+    "H": "HEMBRA", "HEMBRAS": "HEMBRA", "VACA": "HEMBRA", "VAQUILLA": "HEMBRA",
+    "F": "HEMBRA",  # 'female'
+}
+ORIGEN_SINONIMOS = {
+    "NACIDO_EN_FINCA": "NACIDO_FINCA", "NACIDA_EN_FINCA": "NACIDO_FINCA",
+    "NACIDO_EN_LA_FINCA": "NACIDO_FINCA", "NACIDA_EN_LA_FINCA": "NACIDO_FINCA",
+    "NACIDO": "NACIDO_FINCA", "NACIDA": "NACIDO_FINCA", "PROPIO": "NACIDO_FINCA",
+    "NAC_FINCA": "NACIDO_FINCA", "NAC": "NACIDO_FINCA",
+    "COMPRA": "COMPRADO", "COMPRADA": "COMPRADO", "ADQUIRIDO": "COMPRADO",
+    "DONACION": "DONADO", "DONADA": "DONADO", "REGALADO": "DONADO",
+    "REGALO": "DONADO",
+}
+TIPO_PRODUCCION_SINONIMOS = {
+    "DOBLE": "DOBLE_PROPOSITO", "DOBLE_PROP": "DOBLE_PROPOSITO",
+    "DOBLE_PROPOSITO": "DOBLE_PROPOSITO", "DP": "DOBLE_PROPOSITO",
+    "MIXTO": "DOBLE_PROPOSITO", "MIXTA": "DOBLE_PROPOSITO",
+}
+ESTADO_ANIMAL_SINONIMOS = {
+    "ACTIVA": "ACTIVO", "VIVO": "ACTIVO", "VIVA": "ACTIVO",
+    "VENDIDA": "VENDIDO", "MUERTA": "MUERTO", "MUERTE": "MUERTO",
+    "DESCARTADO": "DESCARTE", "DESCARTADA": "DESCARTE",
+}
+
 # Modos de importación
 MODO_SOLO_CREAR = "SOLO_CREAR"
 MODO_ACTUALIZAR = "ACTUALIZAR_EXISTENTES"
@@ -51,7 +83,8 @@ TIPO_REFERENCIA = "referencia"  # nombre/arete que se resuelve contra BD o archi
 
 
 def col(key, header, tipo=TIPO_TEXTO, requerido=False, choices=None,
-        default=None, ejemplo="", ayuda="", min_valor=None, alias=None):
+        default=None, ejemplo="", ayuda="", min_valor=None, alias=None,
+        sinonimos=None):
     return {
         "key": key,
         "header": header,
@@ -66,7 +99,29 @@ def col(key, header, tipo=TIPO_TEXTO, requerido=False, choices=None,
         # es insensible a mayúsculas, acentos y separadores; ver
         # ``normalizar_encabezado``).
         "alias": alias or [],
+        # Sinónimos de VALOR para columnas choice: variante normalizada del
+        # usuario -> valor canónico del modelo (ver *_SINONIMOS arriba).
+        "sinonimos": sinonimos or {},
     }
+
+
+def normalizar_choice(texto):
+    """Clave canónica de un valor de choice para el matching tolerante.
+
+    Quita acentos, pasa a mayúsculas y unifica separadores comunes a "_" para
+    que ``"Nacido en finca"``, ``"nacido-en-finca"`` y ``"NACIDO EN FINCA"``
+    normalicen todos igual y puedan resolverse contra choices/sinónimos.
+    """
+    if texto is None:
+        return None
+    base = unicodedata.normalize("NFKD", str(texto))
+    base = "".join(c for c in base if not unicodedata.combining(c))
+    base = base.strip().upper()
+    for sep in _SEPARADORES:
+        base = base.replace(sep, "_")
+    while "__" in base:
+        base = base.replace("__", "_")
+    return base.strip("_")
 
 
 HOJA_ANIMALES = "ANIMALES"
@@ -102,7 +157,8 @@ HOJAS = {
             col("nombre", "nombre", ejemplo="Lucero",
                 alias=["nombre animal", "nombre del animal"]),
             col("sexo", "sexo", tipo=TIPO_CHOICE, requerido=True,
-                choices=SEXO_CHOICES, ejemplo="HEMBRA"),
+                choices=SEXO_CHOICES, ejemplo="HEMBRA",
+                sinonimos=SEXO_SINONIMOS),
             col("raza", "raza", tipo=TIPO_REFERENCIA, ejemplo="Brahman",
                 alias=["nombre raza"],
                 ayuda="Nombre de la raza. Si no existe puede crearse según las opciones."),
@@ -126,15 +182,17 @@ HOJAS = {
                 ejemplo="32", min_valor=0,
                 alias=["peso nacimiento", "peso al nacer", "peso al nacimiento"]),
             col("estado", "estado", tipo=TIPO_CHOICE, choices=ESTADO_ANIMAL_CHOICES,
-                default="ACTIVO", ejemplo="ACTIVO"),
+                default="ACTIVO", ejemplo="ACTIVO",
+                sinonimos=ESTADO_ANIMAL_SINONIMOS),
             col("tipo_produccion", "tipo_produccion", tipo=TIPO_CHOICE,
                 choices=TIPO_PRODUCCION_CHOICES, default="DOBLE_PROPOSITO",
                 ejemplo="DOBLE_PROPOSITO",
                 alias=["produccion", "producción", "tipo produccion",
-                       "tipo de produccion", "tipo producción"]),
+                       "tipo de produccion", "tipo producción"],
+                sinonimos=TIPO_PRODUCCION_SINONIMOS),
             col("origen", "origen", tipo=TIPO_CHOICE, choices=ORIGEN_CHOICES,
                 default="NACIDO_FINCA", ejemplo="NACIDO_FINCA",
-                alias=["procedencia"]),
+                alias=["procedencia"], sinonimos=ORIGEN_SINONIMOS),
             col("color", "color", ejemplo="Blanco", alias=["capa", "pelaje"]),
             col("parcela_actual", "parcela_actual", tipo=TIPO_REFERENCIA,
                 ejemplo="Potrero Norte",

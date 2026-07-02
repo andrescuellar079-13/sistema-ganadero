@@ -288,6 +288,55 @@ class TestImportacionMasiva(BaseImport):
             AnimalParcela.objects.filter(animal=animal, fecha_salida__isnull=True).count(), 1
         )
 
+    def test_16_choices_toleran_sinonimos_y_acentos(self):
+        """Variantes naturales de choices se resuelven al valor canónico.
+
+        'NACIDO_EN_FINCA', 'Nacido en finca', 'M', 'Doble propósito', 'Activa'
+        deben aceptarse sin error y guardarse con el valor del modelo.
+        """
+        archivo = _archivo({constantes.HOJA_ANIMALES: [
+            {"nro_arete": "SIN-1", "sexo": "M", "origen": "NACIDO_EN_FINCA",
+             "tipo_produccion": "Doble propósito", "estado": "Activa"},
+            {"nro_arete": "SIN-2", "sexo": "Hembra", "origen": "Nacido en finca"},
+        ]})
+        prev = servicios.previsualizar(
+            self.finca, self.user, archivo, constantes.MODO_SOLO_CREAR, True
+        )
+        self.assertEqual(prev["total_errores"], 0, prev["muestra_errores"])
+        imp = ImportacionGanadera.objects.get(id=prev["importacion_id"])
+        res = servicios.confirmar(imp)
+        self.assertTrue(res["ok"], res)
+        a1 = Animal.objects.get(nro_arete="SIN-1")
+        self.assertEqual(a1.sexo, "MACHO")
+        self.assertEqual(a1.origen, "NACIDO_FINCA")
+        self.assertEqual(a1.tipo_produccion, "DOBLE_PROPOSITO")
+        self.assertEqual(a1.estado, "ACTIVO")
+        self.assertEqual(Animal.objects.get(nro_arete="SIN-2").origen, "NACIDO_FINCA")
+
+    def test_18_progenitor_con_sexo_sinonimo_se_resuelve(self):
+        """Un padre declarado con sexo sinónimo ('M'/'Toro') se acepta como MACHO."""
+        filas = [
+            {"nro_arete": "CRIA-1", "sexo": "H", "padre_arete": "PAPA-1",
+             "madre_arete": "MAMA-1"},
+            {"nro_arete": "PAPA-1", "sexo": "Toro"},
+            {"nro_arete": "MAMA-1", "sexo": "Vaca"},
+        ]
+        _p, res, _imp = self.importar({constantes.HOJA_ANIMALES: filas})
+        self.assertTrue(res["ok"], res)
+        cria = Animal.objects.get(nro_arete="CRIA-1")
+        self.assertEqual(cria.padre.nro_arete, "PAPA-1")
+        self.assertEqual(cria.madre.nro_arete, "MAMA-1")
+        self.assertEqual(Animal.objects.get(nro_arete="PAPA-1").sexo, "MACHO")
+
+    def test_17_choice_realmente_invalido_lista_valores_validos(self):
+        """Un valor sin sinónimo sigue siendo error, con los válidos en el mensaje."""
+        prev = self.previsualizar({constantes.HOJA_ANIMALES: [
+            {"nro_arete": "MAL-1", "sexo": "MACHO", "origen": "ROBADO"},
+        ]})
+        errs = [e for e in prev["muestra_errores"] if e["codigo_error"] == "CHOICE_INVALIDO"]
+        self.assertTrue(errs)
+        self.assertIn("NACIDO_FINCA", errs[0]["mensaje"])
+
     def test_15_catalogo_nuevo_repetido_no_se_duplica(self):
         opciones = constantes.Opciones(crear_razas=True)
         archivo = _archivo({constantes.HOJA_ANIMALES: [
